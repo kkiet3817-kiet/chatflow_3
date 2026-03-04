@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'feature/ChatUI_MessHanding/chat_ui.dart';
+import 'feature/LocalStorage_RealtimeLogic/presentation/chat_page.dart';
 
 void main() {
   runApp(
@@ -15,9 +15,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const ChatUI(),
+      home: ChatPage(),
     );
   }
 }
