@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'feature/LocalStorage_RealtimeLogic/presentation/chat_page.dart';
-
+import 'feature/Auth_RoomList/login_page.dart';
 void main() {
   runApp(
     const ProviderScope(
@@ -17,7 +16,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: ChatPage(),
+      home: LoginPage(), // 🔥 đổi lại đây
     );
   }
 }
