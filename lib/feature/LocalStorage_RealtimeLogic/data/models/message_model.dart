@@ -1,27 +1,31 @@
-class Message {
-  final String text;
-  final bool isMe;
-  final DateTime time;
+import '../../domain/entities/message.dart';
 
-  Message({
-    required this.text,
-    required this.isMe,
-    required this.time,
+class MessageModel extends Message {
+  MessageModel({
+    required super.id,
+    required super.roomId,
+    required super.senderId,
+    required super.content,
+    required super.createdAt,
   });
+
+  factory MessageModel.fromJson(Map<String, dynamic> json) {
+    return MessageModel(
+      id: json['id'],
+      roomId: json['roomId'],
+      senderId: json['senderId'],
+      content: json['content'],
+      createdAt: DateTime.parse(json['createdAt']),
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
-      'text': text,
-      'isMe': isMe,
-      'time': time.toIso8601String(),
+      'id': id,
+      'roomId': roomId,
+      'senderId': senderId,
+      'content': content,
+      'createdAt': createdAt.toIso8601String(),
     };
-  }
-
-  factory Message.fromJson(Map<String, dynamic> json) {
-    return Message(
-      text: json['text'],
-      isMe: json['isMe'],
-      time: DateTime.parse(json['time']),
-    );
   }
 }
