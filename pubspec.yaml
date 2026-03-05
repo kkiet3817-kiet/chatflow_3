@@ -18,11 +18,13 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.6
 
+  # Local storage
+  shared_preferences: ^2.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_riverpod: ^2.5.1
   flutter_lints: ^3.0.0
 
 flutter:

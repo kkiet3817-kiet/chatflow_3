@@ -9,128 +9,193 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _nameController = TextEditingController();
+
+  final TextEditingController nameController = TextEditingController();
   bool isLoading = false;
 
-  void handleLogin() async {
-    if (_nameController.text.trim().isEmpty) return;
+  void login() async {
+
+    if (nameController.text.trim().isEmpty) return;
 
     setState(() {
       isLoading = true;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
 
-    if (!mounted) return;
-
-    Navigator.of(context).pushReplacement(
+    Navigator.pushReplacement(
+      context,
       MaterialPageRoute(
         builder: (context) => const RoomListPage(),
       ),
     );
-
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       body: Container(
-        width: double.infinity,
+
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFF4A90E2),
-              Color(0xFF6A11CB),
+              Color(0xFF4facfe),
+              Color(0xFF00f2fe),
+              Color(0xFF6a11cb),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
+
         child: Center(
           child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(30),
+            width: 380,
+            padding: const EdgeInsets.all(35),
+
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: BorderRadius.circular(30),
+
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 40,
+                  offset: const Offset(0, 15),
                 )
               ],
             ),
+
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.chat_bubble,
-                  size: 60,
-                  color: Color(0xFF4A90E2),
+
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF4facfe),
+                        Color(0xFF6a11cb),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+
+                  child: const Icon(
+                    Icons.chat_bubble_rounded,
+                    size: 45,
+                    color: Colors.white,
+                  ),
                 ),
-                const SizedBox(height: 15),
+
+                const SizedBox(height: 18),
+
                 const Text(
                   "ChatFlow",
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 32,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
                   ),
                 ),
+
                 const SizedBox(height: 5),
+
                 const Text(
                   "Đăng nhập để bắt đầu trò chuyện",
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
                 ),
+
                 const SizedBox(height: 30),
 
-                /// Input
                 TextField(
-                  controller: _nameController,
+                  controller: nameController,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => login(),
+
                   decoration: InputDecoration(
-                    hintText: "Tên của bạn",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    hintText: "Nhập tên của bạn",
+
                     prefixIcon: const Icon(Icons.person),
+
+                    filled: true,
+                    fillColor: Colors.grey[100],
+
+                    contentPadding:
+                    const EdgeInsets.symmetric(vertical: 18),
+
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF4facfe),
+                        width: 2,
+                      ),
+                    ),
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
 
-                /// Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: isLoading ? null : handleLogin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4A90E2),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                GestureDetector(
+                  onTap: isLoading ? null : login,
+
+                  child: Container(
+                    width: double.infinity,
+                    height: 55,
+
+                    decoration: BoxDecoration(
+
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF4facfe),
+                          Color(0xFF6a11cb),
+                        ],
                       ),
+
+                      borderRadius: BorderRadius.circular(20),
+
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.4),
+                          blurRadius: 15,
+                          offset: const Offset(0, 6),
+                        )
+                      ],
                     ),
-                    child: isLoading
-                        ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                        : const Text(
-                      "ĐĂNG NHẬP",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+
+                    child: Center(
+                      child: isLoading
+                          ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                          : const Text(
+                        "ĐĂNG NHẬP",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                   ),
-                )
+                ),
+
               ],
             ),
           ),
