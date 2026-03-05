@@ -8,12 +8,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+<<<<<<< HEAD
+import 'package:chatflow/main.dart';
+=======
 import 'package:chatflow_3/main.dart';
+>>>>>>> 88810a659e301eee3ab6e3b0b670628914903eeb
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
+<<<<<<< HEAD
+    await tester.pumpWidget(const MyApp());
+=======
     await tester.pumpWidget( MyApp());
+>>>>>>> 88810a659e301eee3ab6e3b0b670628914903eeb
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);

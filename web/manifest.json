@@ -1,6 +1,11 @@
 {
+<<<<<<< HEAD
+    "name": "chatflow",
+    "short_name": "chatflow",
+=======
     "name": "chatflow_3",
     "short_name": "chatflow_3",
+>>>>>>> 88810a659e301eee3ab6e3b0b670628914903eeb
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
