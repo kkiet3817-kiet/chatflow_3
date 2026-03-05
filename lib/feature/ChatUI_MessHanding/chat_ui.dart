@@ -15,8 +15,7 @@ class _ChatUIState extends ConsumerState<ChatUI> {
   @override
   void initState() {
     super.initState();
-    // load tin nhắn ban đầu
-    ref.read(chatProvider.notifier).startRealtime();
+    // không cần spam nữa
   }
 
   @override
