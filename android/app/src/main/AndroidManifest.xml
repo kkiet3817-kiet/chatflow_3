@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+<<<<<<< HEAD
         android:label="chatflow"
+=======
+        android:label="chatflow_3"
+>>>>>>> 88810a659e301eee3ab6e3b0b670628914903eeb
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
