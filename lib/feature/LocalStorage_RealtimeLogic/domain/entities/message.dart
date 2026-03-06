@@ -2,8 +2,10 @@ class Message {
   final String id;
   final String roomId;
   final String senderId;
-  final String content;
+  String content; // Để có thể sửa
   final DateTime createdAt;
+  bool isUnsent; // Thu hồi
+  bool isLiked;  // Thả tim
 
   Message({
     required this.id,
@@ -11,5 +13,7 @@ class Message {
     required this.senderId,
     required this.content,
     required this.createdAt,
+    this.isUnsent = false,
+    this.isLiked = false,
   });
 }

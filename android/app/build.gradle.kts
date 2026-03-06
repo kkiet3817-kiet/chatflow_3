@@ -6,11 +6,7 @@ plugins {
 }
 
 android {
-<<<<<<< HEAD
-    namespace = "com.example.chatflow"
-=======
     namespace = "com.example.chatflow_3"
->>>>>>> 88810a659e301eee3ab6e3b0b670628914903eeb
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -25,11 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-<<<<<<< HEAD
-        applicationId = "com.example.chatflow"
-=======
         applicationId = "com.example.chatflow_3"
->>>>>>> 88810a659e301eee3ab6e3b0b670628914903eeb
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
