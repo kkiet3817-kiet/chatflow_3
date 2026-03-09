@@ -13,9 +13,13 @@ dependencies:
   cupertino_icons: ^1.0.8
   sqflite: ^2.3.0
   path: ^1.9.0
+<<<<<<< HEAD
   firebase_core: ^2.32.0
   cloud_firestore: ^4.17.5
   firebase_auth: ^4.16.0
+=======
+  image_picker: ^1.0.7
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
 
 dev_dependencies:
   flutter_test:

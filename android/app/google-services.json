@@ -1,21 +1,37 @@
 {
   "project_info": {
+<<<<<<< HEAD
     "project_number": "590632320410",
     "project_id": "chatflow3",
     "storage_bucket": "chatflow3.firebasestorage.app"
+=======
+    "project_number": "1033928574010",
+    "project_id": "chatflow-28259",
+    "storage_bucket": "chatflow-28259.firebasestorage.app"
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
   },
   "client": [
     {
       "client_info": {
+<<<<<<< HEAD
         "mobilesdk_app_id": "1:590632320410:android:25043c3bd3974813048e23",
         "android_client_info": {
           "package_name": "com.example.chatflow_3"
+=======
+        "mobilesdk_app_id": "1:1033928574010:android:995d251ff7d8004743a103",
+        "android_client_info": {
+          "package_name": "com.example.chatflo"
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
         }
       },
       "oauth_client": [],
       "api_key": [
         {
+<<<<<<< HEAD
           "current_key": "AIzaSyAr62UT58WgpidF6kNjvEbl_aN6bJi8psA"
+=======
+          "current_key": "AIzaSyDiy-Q_HLYrQ3OwpjMuNjPfHgq-l9_5TCM"
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
         }
       ],
       "services": {

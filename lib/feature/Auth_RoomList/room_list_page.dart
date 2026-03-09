@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'chat_page.dart';
 import 'login_page.dart';
+<<<<<<< HEAD
 import '../LocalStorage_RealtimeLogic/data/datasources/firebase_chat_service.dart';
+=======
+import 'create_group_page.dart';
+import '../LocalStorage_RealtimeLogic/data/datasources/local_message_datasource.dart';
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
 
 class RoomListPage extends StatefulWidget {
   final String username;
@@ -15,8 +20,30 @@ class _RoomListPageState extends State<RoomListPage> {
   final FirebaseChatService _firebaseService = FirebaseChatService();
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
+<<<<<<< HEAD
   bool _isSearching = false;
 
+=======
+  List<Map<String, dynamic>> _chatHistory = [];
+  List<Map<String, dynamic>> _myGroups = [];
+  bool _isSearching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshData();
+  }
+
+  Future<void> _refreshData() async {
+    final history = await _db.getChatContacts(widget.username);
+    final groups = await _db.getMyGroups(widget.username);
+    setState(() {
+      _chatHistory = history;
+      _myGroups = groups;
+    });
+  }
+
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
   void _onSearch(String query) async {
     if (query.trim().isEmpty) {
       setState(() {
@@ -35,15 +62,24 @@ class _RoomListPageState extends State<RoomListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFF),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => CreateGroupPage(currentUsername: widget.username)));
+          if (res == true) _refreshData();
+        },
+        label: const Text("Tạo nhóm"),
+        icon: const Icon(Icons.group_add),
+        backgroundColor: const Color(0xFF0072ff),
+      ),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             expandedHeight: 120.0,
             floating: true,
             pinned: true,
-            elevation: 0,
             backgroundColor: const Color(0xFF0072ff),
             flexibleSpace: FlexibleSpaceBar(
+<<<<<<< HEAD
               centerTitle: false,
               titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
               title: const Text("ChatFlow Online", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: 1)),
@@ -52,15 +88,16 @@ class _RoomListPageState extends State<RoomListPage> {
                   gradient: LinearGradient(colors: [Color(0xFF00c6ff), Color(0xFF0072ff)]),
                 ),
               ),
+=======
+              title: const Text("ChatFlow", style: TextStyle(fontWeight: FontWeight.bold)),
+              background: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF00c6ff), Color(0xFF0072ff)]))),
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
-                onPressed: () => Navigator.pushAndRemoveUntil(
-                  context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false),
-              ),
+              IconButton(icon: const Icon(Icons.logout), onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()))),
             ],
           ),
+<<<<<<< HEAD
           
           // Thanh tìm kiếm người dùng thật trên toàn hệ thống
           SliverToBoxAdapter(
@@ -81,10 +118,25 @@ class _RoomListPageState extends State<RoomListPage> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 15),
                   ),
+=======
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _onSearch,
+                decoration: InputDecoration(
+                  hintText: "Tìm kiếm bạn bè...",
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
                 ),
               ),
             ),
           ),
+<<<<<<< HEAD
 
           // Hiển thị danh sách kết quả tìm kiếm từ Firebase
           SliverPadding(
@@ -98,7 +150,26 @@ class _RoomListPageState extends State<RoomListPage> {
                   return _buildUserTile(user);
                 },
                 childCount: _searchResults.isEmpty ? 1 : _searchResults.length,
+=======
+          if (!_isSearching && _myGroups.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: Text("Nhóm của tôi", style: TextStyle(fontWeight: FontWeight.bold)))),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _buildGroupTile(_myGroups[index]),
+                childCount: _myGroups.length,
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
               ),
+            ),
+          ],
+          SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: Text(_isSearching ? "Kết quả tìm kiếm" : "Tin nhắn gần đây", style: const TextStyle(fontWeight: FontWeight.bold)))),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final list = _isSearching ? _searchResults : _chatHistory;
+                if (list.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Không có dữ liệu")));
+                return _buildUserTile(list[index]);
+              },
+              childCount: _isSearching ? (_searchResults.isEmpty ? 1 : _searchResults.length) : (_chatHistory.isEmpty ? 1 : _chatHistory.length),
             ),
           ),
         ],
@@ -106,6 +177,7 @@ class _RoomListPageState extends State<RoomListPage> {
     );
   }
 
+<<<<<<< HEAD
   Widget _buildEmptyState() {
     return Padding(
       padding: const EdgeInsets.only(top: 50),
@@ -119,10 +191,22 @@ class _RoomListPageState extends State<RoomListPage> {
           ],
         ),
       ),
+=======
+  Widget _buildGroupTile(Map<String, dynamic> group) {
+    return ListTile(
+      leading: CircleAvatar(backgroundColor: Colors.blue[100], child: const Icon(Icons.group, color: Colors.blue)),
+      title: Text(group['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: const Text("Nhấn để vào nhóm"),
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: group['name'], currentUserId: widget.username, isGroup: true, roomId: group['id'])));
+        _refreshData();
+      },
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
     );
   }
 
   Widget _buildUserTile(Map<String, dynamic> user) {
+<<<<<<< HEAD
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -149,6 +233,16 @@ class _RoomListPageState extends State<RoomListPage> {
           );
         },
       ),
+=======
+    return ListTile(
+      leading: CircleAvatar(backgroundImage: NetworkImage(user['avatarUrl'] ?? "")),
+      title: Text(user['username'], style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: const Text("Xem tin nhắn mới nhất"),
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: user['username'], receiverAvatar: user['avatarUrl'], currentUserId: widget.username)));
+        _refreshData();
+      },
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
     );
   }
 }
