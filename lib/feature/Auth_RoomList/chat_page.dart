@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // THÊM DÒNG NÀY
 import 'package:intl/intl.dart';
 import '../LocalStorage_RealtimeLogic/data/models/message_model.dart';
 
@@ -29,6 +30,7 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance; // THÊM DÒNG NÀY
   final ImagePicker _picker = ImagePicker();
 
   List<String> _groupMembers = [];
@@ -36,6 +38,7 @@ class _ChatPageState extends State<ChatPage> {
   String _tagQuery = "";
   bool _isComposing = false;
   MessageModel? _replyingTo;
+  bool _isUploading = false; // Trạng thái đang tải ảnh lên
 
   String get currentRoomId {
     if (widget.roomId != null) return widget.roomId!;
@@ -53,7 +56,6 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _markAsSeen() {
-    // Chỉ đánh dấu đã xem cho các tin nhắn do người khác gửi
     _firestore.collection('messages')
         .where('roomId', isEqualTo: currentRoomId)
         .where('senderId', isNotEqualTo: widget.currentUserId)
@@ -125,6 +127,35 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  // LOGIC UPLOAD ẢNH THẬT LÊN FIREBASE STORAGE
+  Future<void> _handleImageSelection(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(source: source, imageQuality: 70);
+      if (image == null) return;
+
+      setState(() => _isUploading = true);
+
+      // 1. Tạo tên file duy nhất
+      String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
+      Reference ref = _storage.ref().child("chat_images").child(currentRoomId).child(fileName);
+
+      // 2. Upload file
+      UploadTask uploadTask = ref.putFile(File(image.path));
+      TaskSnapshot snapshot = await uploadTask;
+
+      // 3. Lấy link download
+      String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      // 4. Gửi tin nhắn chứa link ảnh
+      await _sendMessage(imageUrl: downloadUrl);
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi tải ảnh: $e")));
+    } finally {
+      setState(() => _isUploading = false);
+    }
+  }
+
   Future<void> _sendMessage({String? content, String? imageUrl}) async {
     if ((content == null || content.trim().isEmpty) && imageUrl == null) return;
 
@@ -181,7 +212,7 @@ class _ChatPageState extends State<ChatPage> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-      body: Center(child: InteractiveViewer(child: Image.network(url))),
+      body: Center(child: InteractiveViewer(child: Image.network(url, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.white, size: 50)))),
     )));
   }
 
@@ -272,9 +303,6 @@ class _ChatPageState extends State<ChatPage> {
                 final docs = snapshot.data!.docs;
                 final messages = docs.map((doc) => MessageModel.fromJson(doc.data() as Map<String, dynamic>)).toList();
                 
-                // Tự động đánh dấu đã xem
-                _markAsSeen();
-
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
@@ -294,6 +322,7 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
+          if (_isUploading) const LinearProgressIndicator(), // Hiển thị thanh tiến trình khi đang upload
           if (_showTagSuggestions) _buildTagSuggestions(),
           _buildInputArea(),
         ],
@@ -334,7 +363,6 @@ class _ChatPageState extends State<ChatPage> {
               if (widget.isGroup && !isMe)
                 Padding(padding: const EdgeInsets.only(left: 5, bottom: 2), child: Text(m.senderId, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54))),
               
-              // HIỂN THỊ TIN NHẮN ĐƯỢC TRẢ LỜI
               if (m.replyTo != null)
                 Container(
                   margin: const EdgeInsets.only(bottom: 2),
@@ -365,7 +393,22 @@ class _ChatPageState extends State<ChatPage> {
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: hasImage && !m.isUnsent
-                            ? ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.network(m.imageUrl!, width: 200, fit: BoxFit.cover))
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(18), 
+                                child: Image.network(
+                                  m.imageUrl!, 
+                                  width: 200, 
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, progress) => progress == null ? child : Container(width: 200, height: 150, color: Colors.grey[200], child: const Center(child: CircularProgressIndicator())),
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    width: 200, height: 150, color: Colors.grey[300],
+                                    child: const Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [Icon(Icons.broken_image, color: Colors.grey), Text("Lỗi tải ảnh", style: TextStyle(fontSize: 10, color: Colors.grey))],
+                                    ),
+                                  ),
+                                )
+                              )
                             : Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), child: Text(m.content, style: TextStyle(color: m.isUnsent ? Colors.grey : (isMe ? Colors.white : Colors.black87), fontSize: 16))),
                         ),
                       ),
@@ -414,8 +457,8 @@ class _ChatPageState extends State<ChatPage> {
           child: SafeArea(
             child: Row(
               children: [
-                IconButton(icon: const Icon(Icons.camera_alt_rounded, color: Colors.blue), onPressed: () {}),
-                IconButton(icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.blue), onPressed: () => _sendMessage(imageUrl: "https://via.placeholder.com/150")),
+                IconButton(icon: const Icon(Icons.camera_alt_rounded, color: Colors.blue), onPressed: () => _handleImageSelection(ImageSource.camera)),
+                IconButton(icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.blue), onPressed: () => _handleImageSelection(ImageSource.gallery)),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
