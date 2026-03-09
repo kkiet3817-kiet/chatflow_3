@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'room_list_page.dart';
 import '../LocalStorage_RealtimeLogic/data/datasources/local_message_datasource.dart';
 
@@ -13,71 +15,96 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController userController = TextEditingController();
   final TextEditingController passController = TextEditingController();
   final LocalMessageDataSource _db = LocalMessageDataSource();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool isLoading = false;
   bool isRegisterMode = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  void _checkLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUser = prefs.getString('username');
+    if (savedUser != null && mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => RoomListPage(username: savedUser)));
+    }
+  }
+
   void handleAuth() async {
-    String user = userController.text.trim();
+    String user = userController.text.trim().toLowerCase(); // Chuyển về chữ thường để tránh nhầm lẫn Dat và dat
     String pass = passController.text.trim();
 
     if (user.isEmpty || pass.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Vui lòng nhập đầy đủ thông tin"),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showSnackBar("Vui lòng nhập đầy đủ thông tin", Colors.redAccent);
       return;
     }
 
     setState(() => isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1000));
 
     if (isRegisterMode) {
-      bool success = await _db.register(user, pass);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Đăng ký thành công! Hãy đăng nhập."), backgroundColor: Colors.green),
-        );
+      // BƯỚC 1: Kiểm tra trên Firebase xem tên tài khoản đã tồn tại chưa
+      final userDoc = await _firestore.collection('users').doc(user).get();
+      
+      if (userDoc.exists) {
+        _showSnackBar("Tên tài khoản này đã có người sử dụng!", Colors.orange);
+        setState(() => isLoading = false);
+        return;
+      }
+
+      // BƯỚC 2: Nếu chưa có thì mới cho phép đăng ký
+      bool localSuccess = await _db.register(user, pass);
+      if (localSuccess) {
+        await _firestore.collection('users').doc(user).set({
+          'username': user,
+          'password': pass, // Lưu để máy khác có thể kiểm tra đăng nhập
+          'avatarUrl': "https://ui-avatars.com/api/?name=$user&background=random",
+          'createdAt': FieldValue.serverTimestamp(),
+          'isOnline': false,
+        });
+        _showSnackBar("Đăng ký thành công!", Colors.green);
         setState(() => isRegisterMode = false);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Tài khoản đã tồn tại!"), backgroundColor: Colors.orange),
-        );
       }
     } else {
-      bool success = await _db.login(user, pass);
-      if (success) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => RoomListPage(username: user),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              const begin = Offset(0.0, 1.0);
-              const end = Offset.zero;
-              const curve = Curves.ease;
-              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              return SlideTransition(position: animation.drive(tween), child: child);
-            },
-          ),
-        );
+      // ĐĂNG NHẬP: Kiểm tra trên Firebase thay vì chỉ kiểm tra máy cục bộ
+      final userDoc = await _firestore.collection('users').doc(user).get();
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        if (userData['password'] == pass) {
+          // Đúng mật khẩu
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('username', user);
+          
+          // Lưu xuống local db để đồng bộ
+          await _db.register(user, pass); 
+
+          if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => RoomListPage(username: user)));
+        } else {
+          _showSnackBar("Sai mật khẩu!", Colors.redAccent);
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Sai tài khoản hoặc mật khẩu!"), backgroundColor: Colors.redAccent),
-        );
+        _showSnackBar("Tài khoản không tồn tại!", Colors.redAccent);
       }
     }
     setState(() => isLoading = false);
+  }
+
+  void _showSnackBar(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        width: double.infinity,
-        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xFF6a11cb), Color(0xFF2575fc)],
@@ -85,47 +112,31 @@ class _LoginPageState extends State<LoginPage> {
             end: Alignment.bottomRight,
           ),
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.chat_bubble_outline, size: 80, color: Colors.white),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(30),
+            child: Column(
+              children: [
+                const Icon(Icons.forum_rounded, size: 100, color: Colors.white),
+                const SizedBox(height: 10),
+                const Text("ChatFlow", style: TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                const SizedBox(height: 5),
+                Text(isRegisterMode ? "Tạo tài khoản mới" : "Kết nối với bạn bè", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 16)),
+                const SizedBox(height: 50),
+                _buildTextField(userController, "Tên đăng nhập", Icons.person),
+                const SizedBox(height: 15),
+                _buildTextField(passController, "Mật khẩu", Icons.lock, isObscure: true),
+                const SizedBox(height: 30),
+                _buildMainButton(),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: () => setState(() => isRegisterMode = !isRegisterMode),
+                  child: Text(
+                    isRegisterMode ? "Đã có tài khoản? Đăng nhập" : "Chưa có tài khoản? Đăng ký ngay",
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "ChatFlow",
-                    style: TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold, letterSpacing: 2),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    isRegisterMode ? "Bắt đầu hành trình của bạn" : "Chào mừng bạn quay lại",
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 16),
-                  ),
-                  const SizedBox(height: 50),
-                  _buildInputBox(userController, "Tên đăng nhập", Icons.person_outline),
-                  const SizedBox(height: 20),
-                  _buildInputBox(passController, "Mật khẩu", Icons.lock_outline, obscure: true),
-                  const SizedBox(height: 40),
-                  _buildActionButton(),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () => setState(() => isRegisterMode = !isRegisterMode),
-                    child: Text(
-                      isRegisterMode ? "Đã có tài khoản? Đăng nhập" : "Chưa có tài khoản? Đăng ký ngay",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -133,48 +144,38 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildInputBox(TextEditingController controller, String hint, IconData icon, {bool obscure = false}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-          prefixIcon: Icon(icon, color: Colors.white),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        ),
+  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool isObscure = false}) {
+    return TextField(
+      controller: controller,
+      obscureText: isObscure,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+        prefixIcon: Icon(icon, color: Colors.white),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.2),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(vertical: 18),
       ),
     );
   }
 
-  Widget _buildActionButton() {
-    return GestureDetector(
-      onTap: isLoading ? null : handleAuth,
-      child: Container(
-        width: double.infinity,
-        height: 55,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5)),
-          ],
+  Widget _buildMainButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 55,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : handleAuth,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF2575fc),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: 5,
         ),
-        child: Center(
-          child: isLoading
-              ? const CircularProgressIndicator(color: Color(0xFF6a11cb))
-              : Text(
-                  isRegisterMode ? "ĐĂNG KÝ" : "ĐĂNG NHẬP",
-                  style: const TextStyle(color: Color(0xFF6a11cb), fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-        ),
+        child: isLoading 
+          ? const CircularProgressIndicator() 
+          : Text(isRegisterMode ? "ĐĂNG KÝ" : "ĐĂNG NHẬP", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }

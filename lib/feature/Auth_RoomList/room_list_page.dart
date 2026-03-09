@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'chat_page.dart';
 import 'login_page.dart';
 import 'create_group_page.dart';
-import '../LocalStorage_RealtimeLogic/data/datasources/local_message_datasource.dart';
 
 class RoomListPage extends StatefulWidget {
   final String username;
@@ -13,103 +14,120 @@ class RoomListPage extends StatefulWidget {
 }
 
 class _RoomListPageState extends State<RoomListPage> {
-  final LocalMessageDataSource _db = LocalMessageDataSource();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
-  List<Map<String, dynamic>> _chatHistory = [];
-  List<Map<String, dynamic>> _myGroups = [];
-  bool _isSearching = false;
+  String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
-    _refreshData();
+    _listenForNewMessages();
   }
 
-  Future<void> _refreshData() async {
-    final history = await _db.getChatContacts(widget.username);
-    final groups = await _db.getMyGroups(widget.username);
-    setState(() {
-      _chatHistory = history;
-      _myGroups = groups;
+  void _listenForNewMessages() {
+    _firestore.collection('messages')
+        .where('receiverId', isEqualTo: widget.username)
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final createdAtStr = data['createdAt'];
+        if (createdAtStr == null) return;
+        final createdAt = DateTime.parse(createdAtStr);
+        if (DateTime.now().difference(createdAt).inSeconds < 5) {
+          _showInAppNotification(data['senderId'] ?? "Người dùng", data['content'] ?? "[Hình ảnh]");
+        }
+      }
     });
   }
 
-  void _onSearch(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-      });
+  void _showInAppNotification(String sender, String content) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(top: 10, left: 10, right: 10, bottom: 650),
+        backgroundColor: Colors.white,
+        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        duration: const Duration(seconds: 3),
+        content: Row(
+          children: [
+            CircleAvatar(radius: 20, backgroundImage: NetworkImage("https://ui-avatars.com/api/?name=$sender")),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(sender, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  Text(content, style: const TextStyle(color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _deleteGroup(String groupId, String groupName, String createdBy) {
+    if (createdBy != widget.username) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Chỉ người tạo nhóm mới có quyền xóa!")));
       return;
     }
-    setState(() => _isSearching = true);
-    final results = await _db.searchUsers(query, widget.username);
-    setState(() => _searchResults = results);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Xóa nhóm"),
+        content: Text("Bạn có chắc chắn muốn xóa nhóm '$groupName' không?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await _firestore.collection('groups').doc(groupId).delete();
+              await _firestore.collection('conversations').doc(groupId).delete();
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text("Xóa", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => CreateGroupPage(currentUsername: widget.username)));
-          if (res == true) _refreshData();
-        },
-        label: const Text("Tạo nhóm"),
-        icon: const Icon(Icons.group_add),
-        backgroundColor: const Color(0xFF0072ff),
+      backgroundColor: const Color(0xFFF0F2F5),
+      appBar: AppBar(
+        elevation: 0, backgroundColor: Colors.white,
+        title: const Text("ChatFlow", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
+        actions: [
+          IconButton(icon: const Icon(Icons.group_add_outlined, color: Colors.blue), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CreateGroupPage(currentUsername: widget.username)))),
+          IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), onPressed: _handleLogout),
+        ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 120.0,
-            floating: true,
-            pinned: true,
-            backgroundColor: const Color(0xFF0072ff),
-            flexibleSpace: FlexibleSpaceBar(
-              title: const Text("ChatFlow", style: TextStyle(fontWeight: FontWeight.bold)),
-              background: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF00c6ff), Color(0xFF0072ff)]))),
-            ),
-            actions: [
-              IconButton(icon: const Icon(Icons.logout), onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()))),
-            ],
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearch,
-                decoration: InputDecoration(
-                  hintText: "Tìm kiếm bạn bè...",
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                ),
-              ),
-            ),
-          ),
-          if (!_isSearching && _myGroups.isNotEmpty) ...[
-            const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: Text("Nhóm của tôi", style: TextStyle(fontWeight: FontWeight.bold)))),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildGroupTile(_myGroups[index]),
-                childCount: _myGroups.length,
-              ),
-            ),
-          ],
-          SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), child: Text(_isSearching ? "Kết quả tìm kiếm" : "Tin nhắn gần đây", style: const TextStyle(fontWeight: FontWeight.bold)))),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final list = _isSearching ? _searchResults : _chatHistory;
-                if (list.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Không có dữ liệu")));
-                return _buildUserTile(list[index]);
-              },
-              childCount: _isSearching ? (_searchResults.isEmpty ? 1 : _searchResults.length) : (_chatHistory.isEmpty ? 1 : _chatHistory.length),
+      body: Column(
+        children: [
+          _buildMyProfileHeader(),
+          _buildSearchBar(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              children: [
+                _buildSectionTitle("Nhóm của tôi"),
+                _buildRealtimeGroups(),
+                _buildSectionTitle("Trò chuyện gần đây"),
+                _buildRealtimeConversations(),
+                if (_searchQuery.isNotEmpty && _searchResults.isNotEmpty) ...[
+                  _buildSectionTitle("Tìm người dùng mới"),
+                  ..._searchResults.map((u) => _buildUserCard(u)),
+                ]
+              ],
             ),
           ),
         ],
@@ -117,27 +135,184 @@ class _RoomListPageState extends State<RoomListPage> {
     );
   }
 
-  Widget _buildGroupTile(Map<String, dynamic> group) {
-    return ListTile(
-      leading: CircleAvatar(backgroundColor: Colors.blue[100], child: const Icon(Icons.group, color: Colors.blue)),
-      title: Text(group['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: const Text("Nhấn để vào nhóm"),
-      onTap: () async {
-        await Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: group['name'], currentUserId: widget.username, isGroup: true, roomId: group['id'])));
-        _refreshData();
+  Widget _buildMyProfileHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      color: Colors.white,
+      child: Row(
+        children: [
+          _buildAvatarWithStatus(widget.username, radius: 28),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Tài khoản của tôi", style: TextStyle(color: Colors.grey, fontSize: 12)),
+              Text(widget.username, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarWithStatus(String username, {double radius = 25}) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(username).snapshots(),
+      builder: (context, snapshot) {
+        bool isOnline = false;
+        String avatarUrl = "https://ui-avatars.com/api/?name=$username&background=random";
+        
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          isOnline = data['isOnline'] ?? false;
+          avatarUrl = data['avatarUrl'] ?? avatarUrl;
+        }
+
+        return Stack(
+          children: [
+            CircleAvatar(radius: radius, backgroundImage: NetworkImage(avatarUrl)),
+            if (isOnline)
+              Positioned(
+                right: 0, bottom: 0,
+                child: Container(
+                  width: radius * 0.6, height: radius * 0.6,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+          ],
+        );
       },
     );
   }
 
-  Widget _buildUserTile(Map<String, dynamic> user) {
-    return ListTile(
-      leading: CircleAvatar(backgroundImage: NetworkImage(user['avatarUrl'] ?? "")),
-      title: Text(user['username'], style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: const Text("Xem tin nhắn mới nhất"),
-      onTap: () async {
-        await Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: user['username'], receiverAvatar: user['avatarUrl'], currentUserId: widget.username)));
-        _refreshData();
+  Widget _buildRealtimeGroups() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('groups').where('members', arrayContains: widget.username).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox();
+        var groups = snapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+        if (_searchQuery.isNotEmpty) { groups = groups.where((g) => (g['name'] ?? "").toString().toLowerCase().contains(_searchQuery)).toList(); }
+        return Column(children: groups.map((g) => _buildGroupCard(g)).toList());
       },
     );
+  }
+
+  Widget _buildRealtimeConversations() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('conversations')
+          .where('participants', arrayContains: widget.username)
+          .orderBy('updatedAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox();
+        final convsDocs = snapshot.data!.docs;
+        
+        List<Map<String, dynamic>> filteredConvs = [];
+
+        for (var doc in convsDocs) {
+          final data = doc.data() as Map<String, dynamic>;
+          bool isGroup = data['isGroup'] ?? false;
+          String displayName = "";
+          String otherUserId = "";
+          final names = data['names'] as Map<String, dynamic>?;
+
+          if (isGroup) {
+            displayName = names?['groupName'] ?? data['receiverName'] ?? "Nhóm";
+          } else {
+            final participants = List<String>.from(data['participants'] ?? []);
+            otherUserId = participants.firstWhere((p) => p != widget.username, orElse: () => "User");
+            displayName = names?[otherUserId] ?? otherUserId;
+            if (displayName == "Tôi") displayName = otherUserId;
+          }
+
+          if (_searchQuery.isEmpty || displayName.toLowerCase().contains(_searchQuery)) {
+            data['_displayName'] = displayName;
+            data['_otherUserId'] = otherUserId; // QUAN TRỌNG: Lưu ID để hiện dấu chấm xanh
+            filteredConvs.add(data);
+          }
+        }
+
+        return Column(
+          children: filteredConvs.map((data) => _buildConversationCard(data)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildConversationCard(Map<String, dynamic> data) {
+    bool isGroup = data['isGroup'] ?? false;
+    String displayName = data['_displayName'];
+    String otherUserId = data['_otherUserId'];
+
+    return Card(
+      elevation: 0, margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: ListTile(
+        leading: isGroup 
+            ? CircleAvatar(radius: 25, backgroundColor: Colors.blue.shade100, child: const Icon(Icons.groups, color: Colors.blue))
+            : _buildAvatarWithStatus(otherUserId), // Hiển thị trạng thái cho người dùng cá nhân
+        title: Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(data['lastMessage'] ?? "", maxLines: 1, overflow: TextOverflow.ellipsis),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: displayName, currentUserId: widget.username, isGroup: isGroup, roomId: data['id'], receiverAvatar: "https://ui-avatars.com/api/?name=$displayName"))),
+      ),
+    );
+  }
+
+  Widget _buildUserCard(Map<String, dynamic> user) {
+    final name = user['username'] ?? "User";
+    return Card(
+      elevation: 0, margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: ListTile(
+        leading: _buildAvatarWithStatus(name),
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: const Text("Nhấn để bắt đầu chat"),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: name, currentUserId: widget.username))),
+      ),
+    );
+  }
+
+  Widget _buildGroupCard(Map<String, dynamic> group) {
+    final name = group['name'] ?? "Nhóm";
+    return Card(
+      elevation: 0, margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: InkWell(
+        onLongPress: () => _deleteGroup(group['id'], name, group['createdBy']),
+        child: ListTile(
+          leading: CircleAvatar(radius: 25, backgroundColor: Colors.blue.shade100, child: const Icon(Icons.groups, color: Colors.blue)),
+          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text("${(group['members'] as List? ?? []).length} thành viên"),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(receiverName: name, currentUserId: widget.username, isGroup: true, roomId: group['id']))),
+        ),
+      ),
+    );
+  }
+
+  void _onSearchChanged(String query) async {
+    setState(() { _searchQuery = query.trim().toLowerCase(); });
+    if (_searchQuery.isEmpty) { setState(() => _searchResults = []); return; }
+    final snapshot = await _firestore.collection('users').where('username', isGreaterThanOrEqualTo: query).where('username', isLessThanOrEqualTo: query + '\uf8ff').get();
+    setState(() { _searchResults = snapshot.docs.map((doc) => doc.data()).where((user) => user['username'] != widget.username).toList(); });
+  }
+
+  void _handleLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (widget.username.isNotEmpty) {
+      await _firestore.collection('users').doc(widget.username).update({'isOnline': false});
+    }
+    await prefs.clear();
+    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+  }
+
+  Widget _buildSearchBar() {
+    return Container(padding: const EdgeInsets.all(15), color: Colors.white, child: TextField(controller: _searchController, onChanged: _onSearchChanged, decoration: InputDecoration(hintText: "Tìm kiếm...", prefixIcon: const Icon(Icons.search), filled: true, fillColor: const Color(0xFFF0F2F5), border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none), contentPadding: EdgeInsets.zero)));
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 5), child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 14)));
   }
 }
