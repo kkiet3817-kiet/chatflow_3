@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class UserPresenceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Cập nhật trạng thái hoạt động
+  // Cập nhật trạng thái
   Future<void> updateUserStatus(String username, bool isOnline) async {
     if (username.isEmpty) return;
     try {
@@ -16,8 +16,14 @@ class UserPresenceService {
     }
   }
 
-  // Lắng nghe trạng thái của một người dùng cụ thể
-  Stream<DocumentSnapshot> getUserStatus(String username) {
+  // Lắng nghe trạng thái realtime
+  Stream<DocumentSnapshot> getUserStatus(Stream<String> usernameStream) {
+    return usernameStream.asyncMap((username) => 
+      _firestore.collection('users').doc(username).get()
+    );
+  }
+  
+  Stream<DocumentSnapshot> streamUserStatus(String username) {
     return _firestore.collection('users').doc(username).snapshots();
   }
 }

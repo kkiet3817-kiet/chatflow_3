@@ -3,10 +3,12 @@ class Message {
   final String roomId;
   final String senderId;
   String content; 
-  final String? imageUrl; // Thêm trường này
+  final String? imageUrl;
   final DateTime createdAt;
   bool isUnsent; 
   bool isLiked;  
+  bool isSeen;
+  Map<String, dynamic>? replyTo;
 
   Message({
     required this.id,
@@ -17,5 +19,7 @@ class Message {
     this.imageUrl,
     this.isUnsent = false,
     this.isLiked = false,
+    this.isSeen = false,
+    this.replyTo,
   });
 }

@@ -18,6 +18,12 @@ dependencies:
   sqflite: ^2.3.0
   path: ^1.9.0
   image_picker: ^1.0.7
+  intl: ^0.19.0
+  
+  # Thư viện Firebase
+  firebase_core: ^2.24.2
+  cloud_firestore: ^4.14.0
+  firebase_auth: ^4.16.0
 
 dev_dependencies:
   flutter_test:

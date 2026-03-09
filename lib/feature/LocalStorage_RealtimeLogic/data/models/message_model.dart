@@ -13,6 +13,8 @@ class MessageModel extends Message {
     this.receiverId,
     super.isUnsent,
     super.isLiked,
+    super.isSeen,
+    super.replyTo,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -21,11 +23,13 @@ class MessageModel extends Message {
       senderId: json['senderId'],
       roomId: json['roomId'] ?? '',
       receiverId: json['receiverId'],
-      content: json['content'],
+      content: json['content'] ?? '',
       imageUrl: json['imageUrl'],
       createdAt: DateTime.parse(json['createdAt']),
-      isUnsent: json['isUnsent'] == 1,
-      isLiked: json['isLiked'] == 1,
+      isUnsent: json['isUnsent'] == true,
+      isLiked: json['isLiked'] == true,
+      isSeen: json['isSeen'] == true,
+      replyTo: json['replyTo'] != null ? Map<String, dynamic>.from(json['replyTo']) : null,
     );
   }
 
@@ -39,8 +43,10 @@ class MessageModel extends Message {
       'content': content,
       'imageUrl': imageUrl,
       'createdAt': createdAt.toIso8601String(),
-      'isUnsent': isUnsent ? 1 : 0,
-      'isLiked': isLiked ? 1 : 0,
+      'isUnsent': isUnsent,
+      'isLiked': isLiked,
+      'isSeen': isSeen,
+      'replyTo': replyTo,
     };
   }
 }
