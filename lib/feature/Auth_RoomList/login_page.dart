@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'room_list_page.dart';
-import '../LocalStorage_RealtimeLogic/data/datasources/local_message_datasource.dart';
+import '../LocalStorage_RealtimeLogic/data/datasources/firebase_chat_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,8 +14,12 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController userController = TextEditingController();
   final TextEditingController passController = TextEditingController();
+<<<<<<< HEAD
+  final FirebaseChatService _firebaseService = FirebaseChatService();
+=======
   final LocalMessageDataSource _db = LocalMessageDataSource();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
   bool isLoading = false;
   bool isRegisterMode = false;
 
@@ -38,12 +42,35 @@ class _LoginPageState extends State<LoginPage> {
     String pass = passController.text.trim();
 
     if (user.isEmpty || pass.isEmpty) {
+<<<<<<< HEAD
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng nhập đầy đủ thông tin"), backgroundColor: Colors.redAccent),
+      );
+=======
       _showSnackBar("Vui lòng nhập đầy đủ thông tin", Colors.redAccent);
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
       return;
     }
 
     setState(() => isLoading = true);
 
+<<<<<<< HEAD
+    try {
+      if (isRegisterMode) {
+        // Đăng ký tài khoản lên Firebase
+        await _firebaseService.registerUser(user, pass);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Đăng ký thành công! Hãy đăng nhập."), backgroundColor: Colors.green),
+        );
+        setState(() => isRegisterMode = false);
+      } else {
+        // Đăng nhập (Trong demo này ta so khớp pass đơn giản trên Cloud)
+        // Lưu ý: Trong thực tế nên dùng Firebase Auth chuyên sâu hơn
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => RoomListPage(username: user)),
+        );
+=======
     if (isRegisterMode) {
       // BƯỚC 1: Kiểm tra trên Firebase xem tên tài khoản đã tồn tại chưa
       final userDoc = await _firestore.collection('users').doc(user).get();
@@ -87,9 +114,15 @@ class _LoginPageState extends State<LoginPage> {
         }
       } else {
         _showSnackBar("Tài khoản không tồn tại!", Colors.redAccent);
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Lỗi: ${e.toString()}"), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      setState(() => isLoading = false);
     }
-    setState(() => isLoading = false);
   }
 
   void _showSnackBar(String msg, Color color) {
@@ -105,13 +138,37 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
+<<<<<<< HEAD
+        width: double.infinity,
+=======
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF6a11cb), Color(0xFF2575fc)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          gradient: LinearGradient(colors: [Color(0xFF6a11cb), Color(0xFF2575fc)]),
         ),
+<<<<<<< HEAD
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Column(
+                children: [
+                  const Icon(Icons.chat_bubble_outline, size: 80, color: Colors.white),
+                  const SizedBox(height: 20),
+                  const Text("ChatFlow Online", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 50),
+                  _buildInput(userController, "Tên đăng nhập", Icons.person_outline),
+                  const SizedBox(height: 20),
+                  _buildInput(passController, "Mật khẩu", Icons.lock_outline, obscure: true),
+                  const SizedBox(height: 40),
+                  _buildButton(),
+                  TextButton(
+                    onPressed: () => setState(() => isRegisterMode = !isRegisterMode),
+                    child: Text(isRegisterMode ? "Đã có tài khoản? Đăng nhập" : "Chưa có tài khoản? Đăng ký ngay", 
+                               style: const TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+=======
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(30),
@@ -137,6 +194,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ],
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
             ),
           ),
         ),
@@ -144,6 +202,22 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+<<<<<<< HEAD
+  Widget _buildInput(TextEditingController controller, String hint, IconData icon, {bool obscure = false}) {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(15)),
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          prefixIcon: Icon(icon, color: Colors.white),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        ),
+=======
   Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool isObscure = false}) {
     return TextField(
       controller: controller,
@@ -157,10 +231,24 @@ class _LoginPageState extends State<LoginPage> {
         fillColor: Colors.white.withOpacity(0.2),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(vertical: 18),
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
       ),
     );
   }
 
+<<<<<<< HEAD
+  Widget _buildButton() {
+    return GestureDetector(
+      onTap: isLoading ? null : handleAuth,
+      child: Container(
+        width: double.infinity,
+        height: 55,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+        child: Center(
+          child: isLoading 
+            ? const CircularProgressIndicator() 
+            : Text(isRegisterMode ? "ĐĂNG KÝ" : "ĐĂNG NHẬP", style: const TextStyle(color: Color(0xFF6a11cb), fontWeight: FontWeight.bold)),
+=======
   Widget _buildMainButton() {
     return SizedBox(
       width: double.infinity,
@@ -172,6 +260,7 @@ class _LoginPageState extends State<LoginPage> {
           foregroundColor: const Color(0xFF2575fc),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           elevation: 5,
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
         ),
         child: isLoading 
           ? const CircularProgressIndicator() 

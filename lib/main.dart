@@ -1,14 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+<<<<<<< HEAD
+=======
 import 'package:shared_preferences/shared_preferences.dart';
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
 import 'feature/Auth_RoomList/login_page.dart';
 import 'feature/LocalStorage_RealtimeLogic/data/datasources/user_presence_service.dart';
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+Future<void> main() async {
+=======
+void main() {
+  // Đảm bảo Flutter được khởi tạo trước khi gọi bất kỳ code native nào
+>>>>>>> 829215fd42ac0e09149a8f2b0cbf5872f6d068cc
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Khởi tạo Firebase
+  await Firebase.initializeApp();
+
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
+=======
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   runApp(const ProviderScope(child: MyApp()));
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
 }
 
 class MyApp extends StatefulWidget {

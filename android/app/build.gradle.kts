@@ -17,10 +17,17 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
+<<<<<<< HEAD
+        applicationId = "com.example.chatflow_3"
+        minSdk = flutter.minSdkVersion // Đặt thủ công 21 để đảm bảo chạy được Firebase
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+=======
         applicationId = "com.example.chatflo"
         minSdk = flutter.minSdkVersion
         targetSdk = 36 // Nên đồng bộ targetSdk với compileSdk
@@ -28,6 +35,7 @@ android {
         versionName = "1.0"
         
         multiDexEnabled = true
+>>>>>>> 70dee18ea0a01a242d90e66029636ad964427b7a
     }
 
     buildTypes {
