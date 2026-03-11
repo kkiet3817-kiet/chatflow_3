@@ -15,6 +15,7 @@ class MessageModel extends Message {
     super.isLiked,
     super.isSeen,
     super.replyTo,
+    super.type,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -30,6 +31,7 @@ class MessageModel extends Message {
       isLiked: json['isLiked'] == true,
       isSeen: json['isSeen'] == true,
       replyTo: json['replyTo'] != null ? Map<String, dynamic>.from(json['replyTo']) : null,
+      type: json['type'] ?? 'text',
     );
   }
 
@@ -47,6 +49,7 @@ class MessageModel extends Message {
       'isLiked': isLiked,
       'isSeen': isSeen,
       'replyTo': replyTo,
+      'type': type,
     };
   }
 }
