@@ -26,6 +26,9 @@ dependencies:
   firebase_auth: ^4.16.0
   firebase_storage: ^11.6.5
 
+  # Thư viện Cờ Vua (Theo gợi ý của hệ thống)
+  flutter_chess_board: ^1.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

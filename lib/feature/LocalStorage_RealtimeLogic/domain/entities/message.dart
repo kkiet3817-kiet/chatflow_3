@@ -9,6 +9,7 @@ class Message {
   bool isLiked;  
   bool isSeen;
   Map<String, dynamic>? replyTo;
+  final String type; // 'text', 'image', 'chess_invite'
 
   Message({
     required this.id,
@@ -21,5 +22,6 @@ class Message {
     this.isLiked = false,
     this.isSeen = false,
     this.replyTo,
+    this.type = 'text',
   });
 }

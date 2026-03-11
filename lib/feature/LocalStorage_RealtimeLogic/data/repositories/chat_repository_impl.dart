@@ -13,9 +13,8 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Future<List<Message>> getMessages(String roomId) async {
-    // Lấy dữ liệu từ local datasource (trả về List<MessageModel>)
+    // Lấy dữ liệu từ local datasource
     final List<MessageModel> history = await local.getMessages(roomId);
-    // Vì MessageModel kế thừa từ Message, nên ta có thể trả về trực tiếp
     return history;
   }
 
@@ -30,8 +29,13 @@ class ChatRepositoryImpl implements ChatRepository {
       createdAt: message.createdAt,
       isUnsent: message.isUnsent,
       isLiked: message.isLiked,
+      isSeen: message.isSeen,
+      replyTo: message.replyTo,
+      type: message.type,
     );
 
+    // Lưu vào local và gửi qua socket/firebase
+    await local.insertMessage(model);
     socket.sendMessage(model);
   }
 
@@ -47,6 +51,9 @@ class ChatRepositoryImpl implements ChatRepository {
         createdAt: model.createdAt,
         isUnsent: model.isUnsent,
         isLiked: model.isLiked,
+        isSeen: model.isSeen,
+        replyTo: model.replyTo,
+        type: model.type,
       ),
     );
   }

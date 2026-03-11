@@ -13,56 +13,74 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _groupNameController = TextEditingController();
   
-  List<Map<String, dynamic>> _allUsers = [];
+  List<Map<String, dynamic>> _friendUsers = [];
   final List<String> _selectedUsers = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    _loadFriendsOnly();
   }
 
-  Future<void> _loadUsers() async {
+  Future<void> _loadFriendsOnly() async {
     try {
-      final snapshot = await _firestore.collection('users').get();
+      // 1. Lấy danh sách bạn bè của mình
+      final myDoc = await _firestore.collection('users').doc(widget.currentUsername).get();
+      if (!myDoc.exists) return;
+      
+      List friendsIds = myDoc.data()?['friends'] ?? [];
+
+      if (friendsIds.isEmpty) {
+        setState(() { _friendUsers = []; _isLoading = false; });
+        return;
+      }
+
+      // 2. Lấy thông tin chi tiết của bạn bè
+      final snapshot = await _firestore.collection('users')
+          .where('username', whereIn: friendsIds)
+          .get();
+
       setState(() {
-        _allUsers = snapshot.docs
-            .map((doc) => doc.data())
-            .where((u) => u['username'] != widget.currentUsername)
-            .toList();
+        _friendUsers = snapshot.docs.map((doc) => doc.data()).toList();
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      debugPrint("Lỗi tải bạn bè: $e");
     }
   }
 
   Future<void> _createGroup() async {
     String name = _groupNameController.text.trim();
     if (name.isEmpty || _selectedUsers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vui lòng nhập tên và chọn thành viên")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vui lòng nhập tên và chọn thành viên từ danh sách bạn bè")));
       return;
     }
 
     setState(() => _isLoading = true);
-
     String groupId = "group_${DateTime.now().millisecondsSinceEpoch}";
-    // Quan trọng: Phải bao gồm cả người tạo trong danh sách members
     List<String> members = [..._selectedUsers, widget.currentUsername];
 
-    final groupData = {
-      'id': groupId,
-      'name': name,
-      'avatarUrl': "https://ui-avatars.com/api/?name=$name&background=random",
-      'members': members,
-      'createdBy': widget.currentUsername,
-      'createdAt': DateTime.now().toIso8601String(),
-    };
-
     try {
-      // Lưu lên Firebase Firestore để tất cả members đều nhận được
-      await _firestore.collection('groups').doc(groupId).set(groupData);
+      await _firestore.collection('groups').doc(groupId).set({
+        'id': groupId,
+        'name': name,
+        'avatarUrl': "https://ui-avatars.com/api/?name=$name&background=random",
+        'members': members,
+        'createdBy': widget.currentUsername,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      
+      await _firestore.collection('conversations').doc(groupId).set({
+        'id': groupId,
+        'name': name,
+        'lastMessage': "Nhóm mới đã được tạo",
+        'updatedAt': FieldValue.serverTimestamp(),
+        'participants': members,
+        'type': 'group',
+      });
+
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setState(() => _isLoading = false);
@@ -77,7 +95,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
       appBar: AppBar(
         title: const Text("Tạo nhóm mới", style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          if (!_isLoading)
+          if (!_isLoading && _friendUsers.isNotEmpty)
             IconButton(icon: const Icon(Icons.check_circle, color: Colors.blue, size: 30), onPressed: _createGroup),
         ],
       ),
@@ -90,35 +108,35 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
                 child: TextField(
                   controller: _groupNameController,
                   decoration: InputDecoration(
-                    hintText: "Tên nhóm của bạn...",
-                    prefixIcon: const Icon(Icons.edit),
+                    hintText: "Tên nhóm...",
                     filled: true,
                     fillColor: const Color(0xFFF0F2F5),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                   ),
                 ),
               ),
+              const Padding(
+                padding: EdgeInsets.only(left: 20, bottom: 10),
+                child: Align(alignment: Alignment.centerLeft, child: Text("Thêm thành viên (Chỉ từ bạn bè)", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13))),
+              ),
               const Divider(),
               Expanded(
-                child: ListView.builder(
-                  itemCount: _allUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = _allUsers[index];
-                    final username = user['username'];
-                    final isSelected = _selectedUsers.contains(username);
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-                      leading: CircleAvatar(radius: 25, backgroundImage: NetworkImage(user['avatarUrl'] ?? "https://ui-avatars.com/api/?name=$username")),
-                      title: Text(username, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      trailing: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: isSelected ? Colors.blue : Colors.grey),
-                      onTap: () {
-                        setState(() {
-                          isSelected ? _selectedUsers.remove(username) : _selectedUsers.add(username);
-                        });
-                      },
-                    );
-                  },
-                ),
+                child: _friendUsers.isEmpty 
+                ? const Center(child: Text("Hãy kết bạn trước khi tạo nhóm"))
+                : ListView.builder(
+                    itemCount: _friendUsers.length,
+                    itemBuilder: (context, index) {
+                      final user = _friendUsers[index];
+                      final uid = user['username'];
+                      final isSelected = _selectedUsers.contains(uid);
+                      return ListTile(
+                        leading: CircleAvatar(backgroundImage: NetworkImage(user['avatarUrl'] ?? "")),
+                        title: Text(user['displayName'] ?? uid),
+                        trailing: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: isSelected ? Colors.blue : Colors.grey),
+                        onTap: () => setState(() => isSelected ? _selectedUsers.remove(uid) : _selectedUsers.add(uid)),
+                      );
+                    },
+                  ),
               ),
             ],
           ),

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'feature/Auth_RoomList/login_page.dart';
-import 'feature/LocalStorage_RealtimeLogic/data/datasources/user_presence_service.dart';
+
+// Key để điều khiển Messenger (hiện tại không dùng SnackBar nữa nên có thể để đó hoặc xóa)
+final GlobalKey<ScaffoldMessengerState> snackbarKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +22,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  final UserPresenceService _presenceService = UserPresenceService();
   String? _currentUsername;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
@@ -33,15 +36,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     _currentUsername = prefs.getString('username');
     if (_currentUsername != null) {
-      _presenceService.updateUserStatus(_currentUsername!, true);
+      _setOnlineStatus(true);
+      // Đã gỡ bỏ listener hiện SnackBar thông báo ở đây theo yêu cầu
+    }
+  }
+
+  void _setOnlineStatus(bool isOnline) {
+    if (_currentUsername != null) {
+      _firestore.collection('users').doc(_currentUsername).update({
+        'isOnline': isOnline,
+        'lastSeen': DateTime.now().toIso8601String(),
+      });
     }
   }
 
   @override
   void dispose() {
-    if (_currentUsername != null) {
-      _presenceService.updateUserStatus(_currentUsername!, false);
-    }
+    _setOnlineStatus(false);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -50,19 +61,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_currentUsername == null) return;
     if (state == AppLifecycleState.resumed) {
-      _presenceService.updateUserStatus(_currentUsername!, true);
+      _setOnlineStatus(true);
     } else {
-      _presenceService.updateUserStatus(_currentUsername!, false);
+      _setOnlineStatus(false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: snackbarKey,
       title: 'ChatFlow',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
         useMaterial3: true,
       ),
       home: const LoginPage(),
