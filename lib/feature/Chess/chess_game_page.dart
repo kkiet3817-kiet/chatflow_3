@@ -272,7 +272,12 @@ class _ChessGamePageState extends State<ChessGamePage> {
                   enableUserMoves: myTurn && !_isGameOver,
                 ),
               ),
+<<<<<<< Updated upstream
               Container(
+=======
+              // LỚP PHỦ TRONG SUỐT ĐỂ NHẬN DIỆN CÚ NHẤN VÀ VẼ CHẤM GỢI Ý
+              SizedBox(
+>>>>>>> Stashed changes
                 width: boardSize,
                 height: boardSize,
                 child: GridView.builder(
@@ -290,8 +295,22 @@ class _ChessGamePageState extends State<ChessGamePage> {
                     return GestureDetector(
                       onTap: () => _onSquareTap(square),
                       child: Container(
+<<<<<<< Updated upstream
                         decoration: BoxDecoration(color: isSelected ? Colors.yellow.withOpacity(0.3) : Colors.transparent),
                         child: Center(child: isHint ? Container(width: 15, height: 15, decoration: BoxDecoration(color: Colors.black26, shape: BoxShape.circle)) : const SizedBox()),
+=======
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.yellow.withValues(alpha: 0.3) : Colors.transparent,
+                        ),
+                        child: Center(
+                          child: isHint 
+                            ? Container(
+                                width: 15, height: 15,
+                                decoration: const BoxDecoration(color: Colors.black26, shape: BoxShape.circle),
+                              ) 
+                            : const SizedBox(),
+                        ),
+>>>>>>> Stashed changes
                       ),
                     );
                   },
@@ -313,7 +332,7 @@ class _ChessGamePageState extends State<ChessGamePage> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: active ? Colors.orangeAccent.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+          color: active ? Colors.orangeAccent.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: active ? Colors.orangeAccent : Colors.transparent, width: 1),
         ),

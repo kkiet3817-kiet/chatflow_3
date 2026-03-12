@@ -6,7 +6,6 @@ plugins {
 }
 
 android {
-    // Nâng cấp lên 36 theo yêu cầu của các plugin
     namespace = "com.example.chatflo"
     compileSdk = 36 
     ndkVersion = flutter.ndkVersion
@@ -23,7 +22,7 @@ android {
     defaultConfig {
         applicationId = "com.example.chatflo"
         minSdk = flutter.minSdkVersion
-        targetSdk = 36 // Nên đồng bộ targetSdk với compileSdk
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         

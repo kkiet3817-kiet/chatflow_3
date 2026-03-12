@@ -183,7 +183,8 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
   void _onPiecePlaced(int pieceIndex, Offset globalPos) {
     if (!myTurn || currentPieces.length <= pieceIndex || currentPieces[pieceIndex].isEmpty) return;
 
-    final RenderBox boardBox = _boardKey.currentContext!.findRenderObject() as RenderBox;
+    final RenderBox? boardBox = _boardKey.currentContext?.findRenderObject() as RenderBox?;
+    if (boardBox == null) return;
     final Offset boardOrigin = boardBox.localToGlobal(Offset.zero);
     final double cellSize = boardBox.size.width / gridSize;
 
@@ -263,6 +264,7 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
   }
 
   void _showGameOverSolo() {
+    if (!mounted) return;
     showDialog(context: context, builder: (context) => AlertDialog(
       title: const Text("Hết lượt!"),
       content: Text("Điểm: $myScore"),
@@ -298,7 +300,7 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), onPressed: () => Navigator.pop(context)),
       ),
       body: DragTarget<Map>(
-        onWillAccept: (_) => true,
+        onWillAcceptWithDetails: (details) => true,
         onAcceptWithDetails: (details) => _onPiecePlaced(details.data['index'], details.offset),
         onMove: (details) => _onDragUpdate(details.data['index'], details.offset),
         builder: (context, _, __) => Column(
@@ -315,8 +317,8 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
                   color: const Color(0xFF1E293B), 
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 10)),
-                    BoxShadow(color: Colors.cyanAccent.withOpacity(0.1), blurRadius: 30, spreadRadius: -5),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10)),
+                    BoxShadow(color: Colors.cyanAccent.withValues(alpha: 0.1), blurRadius: 30, spreadRadius: -5),
                   ]
                 ),
                 child: GridView.builder(
@@ -342,7 +344,7 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
                       if (widget.isSolo) col = [Colors.blue, Colors.red, Colors.green, Colors.yellow, Colors.purple][val % 5];
                       else col = val == 1 ? Colors.cyanAccent : Colors.purpleAccent;
                     } else if (isGhost) {
-                      col = Colors.white.withOpacity(0.2);
+                      col = Colors.white.withValues(alpha: 0.2);
                     }
                     
                     return _build3DBlock(col, isEmpty: val == 0 && !isGhost, isGhost: isGhost);
@@ -360,18 +362,18 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
   }
 
   Widget _build3DBlock(Color? color, {bool isEmpty = false, bool isGhost = false}) {
-    if (isEmpty) return Container(decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(8)));
+    if (isEmpty) return Container(decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)));
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        gradient: isGhost ? null : LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color!.withOpacity(1.0), color.withOpacity(0.6)]),
+        gradient: isGhost ? null : LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color!.withValues(alpha: 1.0), color.withValues(alpha: 0.6)]),
         color: isGhost ? color : null,
         boxShadow: isGhost ? [] : [
-          BoxShadow(color: color!.withOpacity(0.6), blurRadius: 8, offset: const Offset(0, 2)),
-          BoxShadow(color: Colors.white.withOpacity(0.4), blurRadius: 1, offset: const Offset(-1, -1)),
+          BoxShadow(color: color!.withValues(alpha: 0.6), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.white.withValues(alpha: 0.4), blurRadius: 1, offset: const Offset(-1, -1)),
         ],
       ),
-      child: isGhost ? null : Center(child: Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), shape: BoxShape.circle))),
+      child: isGhost ? null : Center(child: Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), shape: BoxShape.circle))),
     );
   }
 
@@ -402,10 +404,10 @@ class _BlockBlastGamePageState extends State<BlockBlastGamePage> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300), width: 155, padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: active ? col.withOpacity(0.2) : Colors.white.withOpacity(0.05), 
+        color: active ? col.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05), 
         borderRadius: BorderRadius.circular(25), 
         border: Border.all(color: active ? col : Colors.white10, width: 2),
-        boxShadow: active ? [BoxShadow(color: col.withOpacity(0.2), blurRadius: 15)] : [],
+        boxShadow: active ? [BoxShadow(color: col.withValues(alpha: 0.2), blurRadius: 15)] : [],
       ),
       child: Column(children: [
         Text(name, style: TextStyle(color: active ? Colors.white : Colors.white38, fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis),
