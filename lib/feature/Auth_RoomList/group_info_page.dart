@@ -1,8 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 class GroupInfoPage extends StatefulWidget {
   final String groupId;
@@ -16,7 +17,6 @@ class GroupInfoPage extends StatefulWidget {
 
 class _GroupInfoPageState extends State<GroupInfoPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
 
@@ -83,20 +83,33 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     );
   }
 
-  // 3. Đổi ảnh đại diện nhóm
+  // 3. Đổi ảnh đại diện nhóm - SỬ DỤNG IMGBB
   Future<void> _updateGroupAvatar() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (image == null) return;
 
     setState(() => _isSaving = true);
     try {
-      String fileName = "group_${widget.groupId}_${DateTime.now().millisecondsSinceEpoch}.jpg";
-      Reference ref = _storage.ref().child("group_avatars").child(fileName);
-      await ref.putFile(File(image.path));
-      String url = await ref.getDownloadURL();
-      await _firestore.collection('groups').doc(widget.groupId).update({'avatarUrl': url});
-      await _firestore.collection('conversations').doc(widget.groupId).update({'avatarUrl': url});
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã cập nhật ảnh nhóm!")));
+      // --- ĐÃ CẬP NHẬT API KEY CHÍNH CHỦ CỦA BẠN ---
+      String apiKey = "49064342991f8c96b14c94a5fa3fb6c8";
+      var request = http.MultipartRequest('POST', Uri.parse('https://api.imgbb.com/1/upload'));
+      request.fields['key'] = apiKey;
+      request.files.add(await http.MultipartFile.fromPath('image', image.path));
+
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+      var jsonResponse = json.decode(responseData);
+
+      if (response.statusCode == 200) {
+        String url = jsonResponse['data']['url'];
+
+        await _firestore.collection('groups').doc(widget.groupId).update({'avatarUrl': url});
+        await _firestore.collection('conversations').doc(widget.groupId).update({'avatarUrl': url});
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã cập nhật ảnh nhóm!")));
+      } else {
+        String errorMsg = jsonResponse['error']?['message'] ?? "Lỗi không xác định";
+        throw Exception(errorMsg);
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
     } finally {

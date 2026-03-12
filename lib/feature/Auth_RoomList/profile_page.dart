@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'login_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final String username;
@@ -14,7 +17,6 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
   
   final TextEditingController _nameController = TextEditingController();
@@ -46,49 +48,77 @@ class _ProfilePageState extends State<ProfilePage> {
 
     setState(() => _isSaving = true);
     try {
-      String fileName = "${widget.username}_${DateTime.now().millisecondsSinceEpoch}.jpg";
-      Reference ref = _storage.ref().child("avatars").child(fileName);
-      
-      // Upload với thời gian chờ tối đa 15 giây để tránh bị treo
-      UploadTask uploadTask = ref.putFile(File(image.path));
-      final snapshot = await uploadTask.timeout(const Duration(seconds: 15));
-      final String url = await snapshot.ref.getDownloadURL();
-      
-      await _firestore.collection('users').doc(widget.username).update({'avatarUrl': url});
-      setState(() {
-        _avatarUrl = url;
-        _isSaving = false;
-      });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cập nhật ảnh đại diện thành công!")));
+      String apiKey = "49064342991f8c96b14c94a5fa3fb6c8"; 
+      var request = http.MultipartRequest('POST', Uri.parse('https://api.imgbb.com/1/upload'));
+      request.fields['key'] = apiKey;
+      request.files.add(await http.MultipartFile.fromPath('image', image.path));
+
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+      var jsonResponse = json.decode(responseData);
+
+      if (response.statusCode == 200) {
+        String url = jsonResponse['data']['url'];
+        await _firestore.collection('users').doc(widget.username).update({'avatarUrl': url});
+        setState(() { _avatarUrl = url; _isSaving = false; });
+      } else {
+        throw Exception(jsonResponse['error']?['message'] ?? "Lỗi upload");
+      }
     } catch (e) {
       setState(() => _isSaving = false);
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Lỗi hệ thống"),
-            content: Text("Không thể tải ảnh. Hãy kiểm tra xem bạn đã nhấn 'Get started' trong mục Storage trên Firebase Console chưa. \n\nChi tiết: $e"),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("ĐÃ HIỂU"))],
-          ),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
     }
   }
 
   Future<void> _saveProfile() async {
     String newName = _nameController.text.trim();
     if (newName.isEmpty) return;
-
     setState(() => _isSaving = true);
     try {
-      await _firestore.collection('users').doc(widget.username).update({
-        'displayName': newName,
-      });
+      await _firestore.collection('users').doc(widget.username).update({'displayName': newName});
       setState(() => _isSaving = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã lưu thay đổi!")));
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
+    }
+  }
+
+  // --- HÀM XÓA TÀI KHOẢN ---
+  Future<void> _deleteAccount() async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Xác nhận xóa", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+        content: const Text("Tài khoản của bạn sẽ bị xóa vĩnh viễn khỏi hệ thống. Bạn có chắc chắn không?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("HỦY")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("XÓA NGAY", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    ) ?? false;
+
+    if (!confirm) return;
+
+    setState(() => _isSaving = true);
+    try {
+      // 1. Xóa trong Firestore
+      await _firestore.collection('users').doc(widget.username).delete();
+      
+      // 2. Xóa trong SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // 3. Quay về trang đăng nhập
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi khi xóa: $e")));
     }
   }
 
@@ -135,12 +165,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   height: 55,
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _saveProfile,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                     child: const Text("LƯU THAY ĐỔI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
+                ),
+                const SizedBox(height: 15),
+                // Nút Xóa tài khoản
+                TextButton(
+                  onPressed: _isSaving ? null : _deleteAccount,
+                  child: const Text("XÓA TÀI KHOẢN VĨNH VIỄN", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
               ],
             ),

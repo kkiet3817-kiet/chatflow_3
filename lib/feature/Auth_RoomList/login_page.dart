@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -34,7 +35,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void handleAuth() async {
-    String user = userController.text.trim().toLowerCase(); // Chuyển về chữ thường để tránh nhầm lẫn Dat và dat
+    String user = userController.text.trim().toLowerCase();
     String pass = passController.text.trim();
 
     if (user.isEmpty || pass.isEmpty) {
@@ -42,45 +43,49 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    // --- THÊM KIỂM TRA ĐỂ CHẶN RÁC ---
+    if (isRegisterMode) {
+      if (user.length < 4) {
+        _showSnackBar("Tên đăng nhập phải có ít nhất 4 ký tự", Colors.orange);
+        return;
+      }
+      if (pass.length < 6) {
+        _showSnackBar("Mật khẩu phải có ít nhất 6 ký tự để bảo mật", Colors.orange);
+        return;
+      }
+    }
+
     setState(() => isLoading = true);
 
     if (isRegisterMode) {
-      // BƯỚC 1: Kiểm tra trên Firebase xem tên tài khoản đã tồn tại chưa
       final userDoc = await _firestore.collection('users').doc(user).get();
-      
       if (userDoc.exists) {
         _showSnackBar("Tên tài khoản này đã có người sử dụng!", Colors.orange);
         setState(() => isLoading = false);
         return;
       }
 
-      // BƯỚC 2: Nếu chưa có thì mới cho phép đăng ký
       bool localSuccess = await _db.register(user, pass);
       if (localSuccess) {
         await _firestore.collection('users').doc(user).set({
           'username': user,
-          'password': pass, // Lưu để máy khác có thể kiểm tra đăng nhập
+          'password': pass,
           'avatarUrl': "https://ui-avatars.com/api/?name=$user&background=random",
           'createdAt': FieldValue.serverTimestamp(),
           'isOnline': false,
+          'displayName': user,
         });
         _showSnackBar("Đăng ký thành công!", Colors.green);
         setState(() => isRegisterMode = false);
       }
     } else {
-      // ĐĂNG NHẬP: Kiểm tra trên Firebase thay vì chỉ kiểm tra máy cục bộ
       final userDoc = await _firestore.collection('users').doc(user).get();
-      
       if (userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;
         if (userData['password'] == pass) {
-          // Đúng mật khẩu
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('username', user);
-          
-          // Lưu xuống local db để đồng bộ
           await _db.register(user, pass); 
-
           if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => RoomListPage(username: user)));
         } else {
           _showSnackBar("Sai mật khẩu!", Colors.redAccent);
