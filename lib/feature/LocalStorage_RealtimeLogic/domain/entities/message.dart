@@ -4,12 +4,14 @@ class Message {
   final String senderId;
   String content; 
   final String? imageUrl;
+  final String? audioUrl; // Thêm trường lưu link âm thanh
   final DateTime createdAt;
   bool isUnsent; 
   bool isLiked;  
   bool isSeen;
+  String? reaction; 
   Map<String, dynamic>? replyTo;
-  final String type; // 'text', 'image', 'chess_invite'
+  final String type; 
 
   Message({
     required this.id,
@@ -18,9 +20,11 @@ class Message {
     required this.content,
     required this.createdAt,
     this.imageUrl,
+    this.audioUrl,
     this.isUnsent = false,
     this.isLiked = false,
     this.isSeen = false,
+    this.reaction,
     this.replyTo,
     this.type = 'text',
   });

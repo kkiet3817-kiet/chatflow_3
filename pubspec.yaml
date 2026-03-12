@@ -19,6 +19,7 @@ dependencies:
   path: ^1.9.0
   image_picker: ^1.0.7
   intl: ^0.19.0
+  http: ^1.1.0
   
   # Thư viện Firebase
   firebase_core: ^2.24.2
@@ -28,6 +29,9 @@ dependencies:
 
   # Thư viện Cờ Vua (Theo gợi ý của hệ thống)
   flutter_chess_board: ^1.0.1
+  record: ^6.2.0
+  audioplayers: ^6.6.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

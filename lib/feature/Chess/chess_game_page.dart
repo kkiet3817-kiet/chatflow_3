@@ -32,7 +32,6 @@ class _ChessGamePageState extends State<ChessGamePage> {
   static const int maxTime = 120;
   bool _isGameOver = false;
 
-  // Biến lưu trữ các ô gợi ý
   List<String> validMovesSquares = [];
   String? selectedSquare;
 
@@ -59,9 +58,17 @@ class _ChessGamePageState extends State<ChessGamePage> {
       if (!mounted) return;
       if (snapshot.exists && snapshot.data() != null) {
         var data = snapshot.data()!;
+        
+        // Kiểm tra trạng thái đầu hàng hoặc kết thúc đặc biệt
+        if (data['status'] == 'resigned') {
+          String winner = data['winner'];
+          _showEndGameDialog("TRẬN ĐẤU KẾT THÚC", winner == widget.currentUserId ? "Đối thủ đã đầu hàng. Bạn thắng!" : "Bạn đã đầu hàng.");
+          return;
+        }
+
         if (data['lastMoveBy'] != widget.currentUserId) {
           _chessController.loadFen(data['fen']);
-          _playMoveSound();
+          if (data['lastMoveBy'] != "system") _playMoveSound();
         }
         
         Timestamp? updatedAt = data['updatedAt'] as Timestamp?;
@@ -87,9 +94,33 @@ class _ChessGamePageState extends State<ChessGamePage> {
     }
   }
 
+  Future<void> _resign() async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Đầu hàng?"),
+        content: const Text("Bạn chắc chắn muốn nhận thua ván này?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("HỦY")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("ĐẦU HÀNG", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm) {
+      await _firestore.collection('chess_games').doc(widget.roomId).update({
+        'status': 'resigned',
+        'winner': widget.opponentName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
   void _showEndGameDialog(String title, String sub) {
     if (_isGameOver) return;
     setState(() => _isGameOver = true);
+    _timer?.cancel();
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -102,22 +133,32 @@ class _ChessGamePageState extends State<ChessGamePage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _syncToFirebase(isInitial: true);
-              setState(() => _isGameOver = false);
+              _resetGame();
             },
             child: const Text("VÁN MỚI", style: TextStyle(color: Colors.orangeAccent)),
           ),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ĐÓNG", style: TextStyle(color: Colors.white38))),
+          TextButton(onPressed: () { Navigator.pop(context); Navigator.pop(context); }, child: const Text("THOÁT", style: TextStyle(color: Colors.white38))),
         ],
       ),
     );
+  }
+
+  void _resetGame() {
+    setState(() {
+      _isGameOver = false;
+      _secondsRemaining = maxTime;
+      validMovesSquares.clear();
+      selectedSquare = null;
+    });
+    _chessController.resetBoard();
+    _syncToFirebase(isInitial: true);
   }
 
   void _updateTurnState() {
     String fen = _chessController.getFen();
     bool isWhiteTurn = fen.contains(" w ");
     myTurn = (isWhiteTurn && isWhite) || (!isWhiteTurn && !isWhite);
-    if (myTurn) {
+    if (myTurn && !_isGameOver) {
       _startCountdown();
     } else {
       _timer?.cancel();
@@ -133,6 +174,9 @@ class _ChessGamePageState extends State<ChessGamePage> {
           _secondsRemaining--;
         } else {
           _timer?.cancel();
+          if (!_isGameOver) {
+             _showEndGameDialog("HẾT GIỜ!", "Bạn đã hết thời gian suy nghĩ.");
+          }
         }
       });
     });
@@ -145,32 +189,32 @@ class _ChessGamePageState extends State<ChessGamePage> {
       'fen': _chessController.getFen(),
       'lastMoveBy': isInitial ? "system" : widget.currentUserId,
       'updatedAt': FieldValue.serverTimestamp(),
+      'status': 'playing',
+      'winner': '',
     });
     
-    // Xóa gợi ý sau khi đi
     setState(() {
       validMovesSquares.clear();
       selectedSquare = null;
     });
   }
 
-  // HÀM XỬ LÝ KHI NHẤN VÀO Ô TRÊN BÀN CỜ
   void _onSquareTap(String square) {
     if (!myTurn || _isGameOver) return;
 
     final game = chess_lib.Chess.fromFEN(_chessController.getFen());
     
-    // Nếu đã chọn 1 ô trước đó và ô mới nhấn là ô hợp lệ -> Thực hiện đi quân
     if (selectedSquare != null && validMovesSquares.contains(square)) {
-      _chessController.makeMove(from: selectedSquare!, to: square);
-      _syncToFirebase();
+      bool moved = game.move({'from': selectedSquare!, 'to': square, 'promotion': 'q'});
+      if (moved) {
+        _chessController.loadFen(game.fen);
+        _syncToFirebase();
+      }
       return;
     }
 
-    // Nếu chưa chọn hoặc nhấn vào quân khác -> Hiển thị gợi ý nước đi
     final piece = game.get(square);
     if (piece != null) {
-      // Chỉ cho phép chọn quân của mình
       bool isMyPiece = (piece.color == chess_lib.Color.WHITE && isWhite) || 
                        (piece.color == chess_lib.Color.BLACK && !isWhite);
       
@@ -201,7 +245,8 @@ class _ChessGamePageState extends State<ChessGamePage> {
         elevation: 0,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white), onPressed: () => Navigator.pop(context)),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: () => _syncToFirebase(isInitial: true)),
+          if (!_isGameOver) IconButton(icon: const Icon(Icons.flag_outlined, color: Colors.redAccent), onPressed: _resign),
+          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _resetGame),
         ],
       ),
       body: Column(
@@ -209,7 +254,6 @@ class _ChessGamePageState extends State<ChessGamePage> {
           const SizedBox(height: 20),
           _buildPlayerInfo(widget.opponentName, !myTurn, !isWhite),
           const Spacer(),
-          // BÀN CỜ VỚI LỚP PHỦ GỢI Ý
           Stack(
             alignment: Alignment.center,
             children: [
@@ -228,7 +272,6 @@ class _ChessGamePageState extends State<ChessGamePage> {
                   enableUserMoves: myTurn && !_isGameOver,
                 ),
               ),
-              // LỚP PHỦ TRONG SUỐT ĐỂ NHẬN DIỆN CÚ NHẤN VÀ VẼ CHẤM GỢI Ý
               Container(
                 width: boardSize,
                 height: boardSize,
@@ -237,31 +280,18 @@ class _ChessGamePageState extends State<ChessGamePage> {
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8),
                   itemCount: 64,
                   itemBuilder: (context, index) {
-                    // Chuyển index thành tọa độ bàn cờ (a1, b2...) dựa theo hướng xoay
                     int row = index ~/ 8;
                     int col = index % 8;
-                    
                     String file = isWhite ? String.fromCharCode(97 + col) : String.fromCharCode(104 - col);
                     int rank = isWhite ? (8 - row) : (row + 1);
                     String square = "$file$rank";
-
                     bool isHint = validMovesSquares.contains(square);
                     bool isSelected = selectedSquare == square;
-
                     return GestureDetector(
                       onTap: () => _onSquareTap(square),
                       child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.yellow.withOpacity(0.3) : Colors.transparent,
-                        ),
-                        child: Center(
-                          child: isHint 
-                            ? Container(
-                                width: 15, height: 15,
-                                decoration: BoxDecoration(color: Colors.black26, shape: BoxShape.circle),
-                              ) 
-                            : const SizedBox(),
-                        ),
+                        decoration: BoxDecoration(color: isSelected ? Colors.yellow.withOpacity(0.3) : Colors.transparent),
+                        child: Center(child: isHint ? Container(width: 15, height: 15, decoration: BoxDecoration(color: Colors.black26, shape: BoxShape.circle)) : const SizedBox()),
                       ),
                     );
                   },
@@ -295,9 +325,7 @@ class _ChessGamePageState extends State<ChessGamePage> {
               child: Icon(Icons.person, color: isWhitePlayer ? Colors.black : Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(name, style: TextStyle(color: active ? Colors.white : Colors.white70, fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
+            Expanded(child: Text(name, style: TextStyle(color: active ? Colors.white : Colors.white70, fontWeight: FontWeight.bold, fontSize: 16))),
             Text(
               "${(_secondsRemaining ~/ 60)}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
               style: TextStyle(color: active ? Colors.orangeAccent : Colors.white38, fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
