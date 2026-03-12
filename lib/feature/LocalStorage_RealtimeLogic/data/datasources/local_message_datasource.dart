@@ -12,7 +12,8 @@ class LocalMessageDataSource {
   }
 
   Future<Database> _initDb() async {
-    String path = join(await getDatabasesPath(), 'chatflow_v10.db'); 
+    // Tăng version lên để SQLite tự động cập nhật cấu trúc bảng
+    String path = join(await getDatabasesPath(), 'chatflow_v11.db'); 
     return await openDatabase(
       path,
       version: 1,
@@ -21,7 +22,8 @@ class LocalMessageDataSource {
           CREATE TABLE users(
             username TEXT PRIMARY KEY,
             password TEXT,
-            avatarUrl TEXT
+            avatarUrl TEXT,
+            displayName TEXT
           )
         ''');
         await db.execute('''
@@ -31,13 +33,6 @@ class LocalMessageDataSource {
             avatarUrl TEXT,
             createdBy TEXT,
             createdAt TEXT
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE group_members(
-            groupId TEXT,
-            username TEXT,
-            PRIMARY KEY (groupId, username)
           )
         ''');
         await db.execute('''
@@ -52,6 +47,10 @@ class LocalMessageDataSource {
             localOwnerId TEXT,
             isUnsent INTEGER DEFAULT 0,
             isLiked INTEGER DEFAULT 0,
+            isSeen INTEGER DEFAULT 0,
+            isEdited INTEGER DEFAULT 0,
+            type TEXT DEFAULT 'text',
+            replyTo TEXT,
             PRIMARY KEY (id, localOwnerId)
           )
         ''');
@@ -59,63 +58,29 @@ class LocalMessageDataSource {
     );
   }
 
-  Future<void> saveGroupLocally(String id, String name, List<String> members, String creator) async {
+  Future<void> insertMessage(MessageModel message) async {
     final db = await database;
-    await db.insert('groups', {
-      'id': id,
-      'name': name,
-      'avatarUrl': "https://ui-avatars.com/api/?name=$name&background=random",
-      'createdBy': creator,
-      'createdAt': DateTime.now().toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-
-    for (var username in members) {
-      await db.insert('group_members', {
-        'groupId': id,
-        'username': username,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
+    Map<String, dynamic> data = message.toJson();
+    data['localOwnerId'] = message.senderId;
+    // Chuyển boolean sang integer cho SQLite
+    data['isUnsent'] = message.isUnsent ? 1 : 0;
+    data['isLiked'] = message.isLiked ? 1 : 0;
+    data['isSeen'] = message.isSeen ? 1 : 0;
+    
+    await db.insert('messages', data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<Map<String, dynamic>>> getMyGroups(String username) async {
+  Future<List<MessageModel>> getMessages(String roomId) async {
     final db = await database;
-    return await db.rawQuery('''
-      SELECT g.* FROM groups g
-      INNER JOIN group_members gm ON g.id = gm.groupId
-      WHERE gm.username = ?
-    ''', [username]);
+    final List<Map<String, dynamic>> maps = await db.query('messages', where: 'roomId = ?', orderBy: 'createdAt ASC');
+    return List.generate(maps.length, (i) => MessageModel.fromJson(maps[i]));
   }
 
   Future<bool> register(String username, String password) async {
     final db = await database;
     try {
-      String avatar = "https://i.pravatar.cc/150?u=$username";
-      await db.insert('users', {'username': username, 'password': password, 'avatarUrl': avatar});
+      await db.insert('users', {'username': username, 'password': password}, conflictAlgorithm: ConflictAlgorithm.replace);
       return true;
     } catch (e) { return false; }
-  }
-
-  Future<bool> login(String username, String password) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('users', where: 'username = ? AND password = ?', whereArgs: [username, password]);
-    return maps.isNotEmpty;
-  }
-
-  Future<List<Map<String, dynamic>>> getChatContacts(String currentUserId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.rawQuery('''
-      SELECT DISTINCT users.username, users.avatarUrl 
-      FROM users 
-      INNER JOIN messages ON (users.username = messages.senderId OR users.username = messages.receiverId)
-      WHERE messages.localOwnerId = ? AND users.username != ?
-    ''', [currentUserId, currentUserId]);
-    return maps;
-  }
-
-  Future<void> sendRealMessage(MessageModel message) async {
-    final db = await database;
-    Map<String, dynamic> data = message.toJson();
-    data['localOwnerId'] = message.senderId;
-    await db.insert('messages', data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }
