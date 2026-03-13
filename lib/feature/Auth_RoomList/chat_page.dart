@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -13,7 +14,9 @@ import 'package:audioplayers/audioplayers.dart';
 import '../LocalStorage_RealtimeLogic/data/models/message_model.dart';
 import '../Chess/chess_game_page.dart';
 import '../Caro/caro_game_page.dart';
+import '../BlockBlast/block_blast_game_page.dart';
 import 'group_info_page.dart';
+import 'fcm_service.dart'; 
 
 class ChatPage extends StatefulWidget {
   final String receiverName;
@@ -190,6 +193,24 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) { debugPrint("Lỗi phát âm thanh: $e"); }
   }
 
+  Future<void> _sendPushNotification(String receiverId, String body) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(receiverId).get();
+      if (!userDoc.exists) return;
+      String? fcmToken = userDoc.data()?['fcmToken'];
+      if (fcmToken == null) return;
+
+      final senderDoc = await _firestore.collection('users').doc(widget.currentUserId).get();
+      String senderName = senderDoc.data()?['displayName'] ?? widget.currentUserId;
+
+      await FCMService.sendNotification(
+        fcmToken: fcmToken,
+        title: senderName,
+        body: body,
+      );
+    } catch (e) { print("Lỗi gửi thông báo: $e"); }
+  }
+
   void _sendMessage({String? content, String? imageUrl, String? audioUrl, String type = 'text'}) async {
     if (_isBlockedByMe || _isBlockedByOther) return;
     if (_editingMessage != null && content != null) {
@@ -206,6 +227,7 @@ class _ChatPageState extends State<ChatPage> {
       else if (type == 'audio') finalContent = "🎤 Tin nhắn thoại";
       else if (type.contains('invite')) finalContent = "🎮 Lời mời chơi game";
     }
+    
     await _firestore.collection('messages').doc(msgId).set({
       'id': msgId, 'senderId': widget.currentUserId, 'receiverId': widget.isGroup ? "group" : widget.receiverName,
       'roomId': currentRoomId, 'content': finalContent, 'imageUrl': imageUrl, 'audioUrl': audioUrl,
@@ -223,8 +245,14 @@ class _ChatPageState extends State<ChatPage> {
 
     if (widget.isGroup) {
       convUpdate['name'] = widget.receiverName;
+      for (var member in _groupMembers) {
+        if (member['username'] != widget.currentUserId) {
+          _sendPushNotification(member['username'], finalContent);
+        }
+      }
     } else {
       convUpdate['participants'] = [widget.currentUserId, widget.receiverName];
+      _sendPushNotification(widget.receiverName, finalContent);
     }
 
     await _firestore.collection('conversations').doc(currentRoomId).set(convUpdate, SetOptions(merge: true));
@@ -310,6 +338,7 @@ class _ChatPageState extends State<ChatPage> {
         child: Row(
           children: [
             IconButton(icon: Icon(Icons.add_circle, color: _themeColor), onPressed: _showAttachmentMenu),
+            IconButton(icon: Icon(Icons.image, color: _themeColor), onPressed: () => _pickAndUploadImage(ImageSource.gallery)), // Đẩy nút Ảnh ra ngoài
             IconButton(icon: Icon(Icons.camera_alt, color: _themeColor), onPressed: () => _pickAndUploadImage(ImageSource.camera)),
             GestureDetector(
               onLongPress: _startRecording,
@@ -439,7 +468,15 @@ class _ChatPageState extends State<ChatPage> {
   );
 
   Widget _buildMessageList() => StreamBuilder<QuerySnapshot>(stream: _firestore.collection('messages').where('roomId', isEqualTo: currentRoomId).orderBy('createdAt', descending: false).snapshots(), builder: (context, snapshot) { if (!snapshot.hasData) return const Center(child: CircularProgressIndicator()); final messages = snapshot.data!.docs.map((doc) => MessageModel.fromJson(doc.data() as Map<String, dynamic>)).toList(); WidgetsBinding.instance.addPostFrameCallback((_) { _markMessagesAsSeen(); _scrollToBottom(); }); return ListView.builder(controller: _scrollController, itemCount: messages.length, itemBuilder: (context, i) => _buildMessageItem(messages[i], i == messages.length - 1)); });
-  void _showAttachmentMenu() => showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 120, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.image, color: Colors.purple, size: 30), onPressed: () { Navigator.pop(context); _pickAndUploadImage(ImageSource.gallery); }), const Text("Ảnh")]), Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.videogame_asset, color: Colors.orange, size: 30), onPressed: () { Navigator.pop(context); _sendMessage(type: 'chess_invite'); }), const Text("Cờ Vua")]), Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.grid_3x3, color: Colors.blue, size: 30), onPressed: () { Navigator.pop(context); _sendMessage(type: 'caro_invite'); }), const Text("Caro")])])));
+  
+  void _showAttachmentMenu() => showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 150, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+    // Đã xóa mục Ảnh ở đây vì đã đẩy ra ngoài thanh input
+    _buildMenuOption(Icons.videogame_asset, "Cờ Vua", Colors.orange, () => _sendMessage(type: 'chess_invite')),
+    _buildMenuOption(Icons.grid_3x3, "Caro", Colors.blue, () => _sendMessage(type: 'caro_invite')),
+    _buildMenuOption(Icons.apps, "Block Blast", Colors.green, () => _sendMessage(type: 'block_blast_invite')),
+  ])));
+
+  Widget _buildMenuOption(IconData icon, String label, Color color, VoidCallback onTap) => GestureDetector(onTap: () { Navigator.pop(context); onTap(); }, child: Column(mainAxisSize: MainAxisSize.min, children: [CircleAvatar(backgroundColor: color.withOpacity(0.1), radius: 25, child: Icon(icon, color: color, size: 30)), const SizedBox(height: 5), Text(label, style: const TextStyle(fontSize: 12))]));
 
   void _showMessageOptions(MessageModel m) {
     bool isMe = m.senderId.toLowerCase() == widget.currentUserId.toLowerCase();
@@ -459,12 +496,14 @@ class _ChatPageState extends State<ChatPage> {
   void _handleReaction(String msgId, String emoji) { _firestore.collection('messages').doc(msgId).update({'reaction': emoji}); Navigator.pop(context); }
 
   Widget _buildGameInviteUI(MessageModel m, bool isMe) { 
-    Color gc = Colors.blue;
-    if (m.type == 'chess_invite') gc = Colors.orange;
+    IconData icon = Icons.videogame_asset; Color gc = Colors.orange;
+    if (m.type == 'caro_invite') { icon = Icons.grid_3x3; gc = Colors.blue; }
+    else if (m.type == 'block_blast_invite') { icon = Icons.apps; gc = Colors.green; }
 
-    return SizedBox(width: 180, child: Column(children: [Icon(m.type == 'chess_invite' ? Icons.videogame_asset : Icons.grid_3x3, color: isMe ? Colors.white : gc, size: 30), Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () { 
+    return SizedBox(width: 180, child: Column(children: [Icon(icon, color: isMe ? Colors.white : gc, size: 30), Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () { 
       if (m.type == 'chess_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => ChessGamePage(roomId: "chess_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
-      else Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
+      else if (m.type == 'caro_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
+      else if (m.type == 'block_blast_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => BlockBlastGamePage(roomId: "block_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
     }, child: const Text("CHẤP NHẬN"))])); 
   }
   Future<void> _pickAndUploadImage(ImageSource source, {bool isBg = false}) async { final XFile? image = await _picker.pickImage(source: source, imageQuality: 70); if (image == null) return; setState(() => _isUploading = true); try { String apiKey = "49064342991f8c96b14c94a5fa3fb6c8"; var request = http.MultipartRequest('POST', Uri.parse('https://api.imgbb.com/1/upload')); request.fields['key'] = apiKey; request.files.add(await http.MultipartFile.fromPath('image', image.path)); var response = await request.send(); if (response.statusCode == 200) { String url = json.decode(await response.stream.bytesToString())['data']['url']; if (isBg) await _firestore.collection('conversations').doc(currentRoomId).set({'backgroundImage': url}, SetOptions(merge: true)); else _sendMessage(imageUrl: url, type: 'image'); } } catch (e) { debugPrint("Lỗi upload: $e"); } finally { setState(() => _isUploading = false); } }

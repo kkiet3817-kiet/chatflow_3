@@ -1,16 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'feature/Auth_RoomList/login_page.dart';
 
-// Key để điều khiển Messenger (hiện tại không dùng SnackBar nữa nên có thể để đó hoặc xóa)
-final GlobalKey<ScaffoldMessengerState> snackbarKey = GlobalKey<ScaffoldMessengerState>();
+// Khởi tạo plugin thông báo
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+  
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse response) {
+      debugPrint("Notification clicked: ${response.payload}");
+    },
+  );
+
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'chat_messages_channel', 
+    'Tin nhắn chat',
+    importance: Importance.max,
+    showBadge: true,
+    playSound: true,
+    enableVibration: true,
+  );
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -29,16 +68,70 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _setupFCM();
     _checkUser();
+  }
+
+  void _setupFCM() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      if (notification != null && android != null) {
+        final String senderId = message.data['senderId'] ?? 'user_id_default';
+        final String senderName = notification.title ?? 'Người gửi';
+
+        final Person sender = Person(
+          name: senderName,
+          key: senderId,
+          important: true,
+        );
+
+        final MessagingStyleInformation messagingStyle = MessagingStyleInformation(
+          sender,
+          conversationTitle: senderName,
+          messages: [
+            Message(
+              notification.body ?? '',
+              DateTime.now(),
+              sender,
+            ),
+          ],
+        );
+
+        flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'chat_messages_channel',
+              'Tin nhắn chat',
+              icon: '@mipmap/ic_launcher',
+              importance: Importance.max,
+              priority: Priority.high,
+              category: AndroidNotificationCategory.message,
+              styleInformation: messagingStyle,
+              showWhen: true,
+              shortcutId: senderId, 
+              setAsGroupSummary: false,
+              // Thêm các thuộc tính này để tăng khả năng hiện bong bóng
+              groupKey: 'chat_group_$senderId',
+              fullScreenIntent: true,
+            ),
+          ),
+          payload: message.data.toString(),
+        );
+      }
+    });
   }
 
   Future<void> _checkUser() async {
     final prefs = await SharedPreferences.getInstance();
-    _currentUsername = prefs.getString('username');
-    if (_currentUsername != null) {
-      _setOnlineStatus(true);
-      // Đã gỡ bỏ listener hiện SnackBar thông báo ở đây theo yêu cầu
-    }
+    setState(() {
+      _currentUsername = prefs.getString('username');
+    });
+    if (_currentUsername != null) _setOnlineStatus(true);
   }
 
   void _setOnlineStatus(bool isOnline) {
@@ -60,17 +153,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_currentUsername == null) return;
-    if (state == AppLifecycleState.resumed) {
-      _setOnlineStatus(true);
-    } else {
-      _setOnlineStatus(false);
-    }
+    _setOnlineStatus(state == AppLifecycleState.resumed);
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      scaffoldMessengerKey: snackbarKey,
       title: 'ChatFlow',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

@@ -20,14 +20,17 @@ dependencies:
   image_picker: ^1.0.7
   intl: ^0.19.0
   http: ^1.1.0
-  
-  # Thư viện Firebase
+  googleapis_auth: ^1.4.1 
+
+  # Thư viện Firebase & Notifications
   firebase_core: ^2.24.2
   cloud_firestore: ^4.14.0
   firebase_auth: ^4.16.0
   firebase_storage: ^11.6.5
+  firebase_messaging: ^14.7.10
+  flutter_local_notifications: ^17.0.0
 
-  # Thư viện Cờ Vua (Theo gợi ý của hệ thống)
+  # Thư viện Cờ Vua
   flutter_chess_board: ^1.0.1
   record: ^6.2.0
   audioplayers: ^6.6.0
@@ -40,3 +43,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - lib/feature/assets/service-account.json # Đã sửa đường dẫn khớp với ảnh của bạn

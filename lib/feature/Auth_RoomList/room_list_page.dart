@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'chat_page.dart';
 import 'login_page.dart';
 import 'create_group_page.dart';
@@ -31,6 +32,20 @@ class _RoomListPageState extends State<RoomListPage> {
   void initState() {
     super.initState();
     _setOnlineStatus(true);
+    _setupFCMToken(); 
+  }
+
+  Future<void> _setupFCMToken() async {
+    try {
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await _firestore.collection('users').doc(widget.username).update({
+          'fcmToken': token,
+        });
+      }
+    } catch (e) {
+      debugPrint("FCM Error: $e");
+    }
   }
 
   void _setOnlineStatus(bool isOnline) {
@@ -96,50 +111,17 @@ class _RoomListPageState extends State<RoomListPage> {
     }
   }
 
-  Future<void> _unfriend(String friendId) async {
-    bool confirm = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Xóa bạn bè"),
-        content: Text("Bạn có chắc chắn muốn xóa $friendId khỏi danh sách bạn bè?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("HỦY")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("XÓA", style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    ) ?? false;
-    if (confirm) {
-      await _firestore.collection('users').doc(widget.username).update({'friends': FieldValue.arrayRemove([friendId])});
-      await _firestore.collection('users').doc(friendId).update({'friends': FieldValue.arrayRemove([widget.username])});
-    }
-  }
-
-  Future<void> _acceptFriend(String requesterId) async {
-    await _firestore.collection('users').doc(widget.username).update({'friends': FieldValue.arrayUnion([requesterId]), 'incomingRequests': FieldValue.arrayRemove([requesterId])});
-    await _firestore.collection('users').doc(requesterId).update({'friends': FieldValue.arrayUnion([widget.username]), 'outgoingRequests': FieldValue.arrayRemove([widget.username])});
-  }
-
-  Future<void> _declineFriend(String requesterId) async {
-    await _firestore.collection('users').doc(widget.username).update({'incomingRequests': FieldValue.arrayRemove([requesterId])});
-    await _firestore.collection('users').doc(requesterId).update({'outgoingRequests': FieldValue.arrayRemove([widget.username])});
-  }
-
   @override
   Widget build(BuildContext context) {
     bool isProfileTab = _selectedIndex == 2;
-
     return Scaffold(
-      backgroundColor: isProfileTab ? Colors.white : bgColor, // Chuyển nền trắng cho tab cá nhân
+      backgroundColor: isProfileTab ? Colors.white : bgColor, 
       bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Chỉ hiện Header nếu KHÔNG PHẢI tab Cá nhân
             if (!isProfileTab) _buildHeader(),
-            
-            // 2. Chỉ hiện Search Bar nếu KHÔNG PHẢI tab Cá nhân
             if (!isProfileTab) _buildSearchBar(),
-            
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -183,11 +165,11 @@ class _RoomListPageState extends State<RoomListPage> {
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('users').doc(widget.username).snapshots(),
       builder: (context, snapshot) {
-        String name = widget.username; String avatar = ""; bool isMeOnline = false;
+        String name = widget.username; String avatarUrl = ""; bool isMeOnline = false;
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>?;
           name = data?['displayName'] ?? name;
-          avatar = data?['avatarUrl'] ?? "";
+          avatarUrl = data?['avatarUrl'] ?? "";
           isMeOnline = data?['isOnline'] == true;
         }
         return Padding(
@@ -195,12 +177,12 @@ class _RoomListPageState extends State<RoomListPage> {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => _showFullImage(avatar, name),
+                onTap: () => _showFullImage(avatarUrl, name),
                 child: Container(
                   decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.2), blurRadius: 10)]),
                   child: Stack(
                     children: [
-                      CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=$name&background=random")),
+                      CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatarUrl.isNotEmpty ? avatarUrl : "https://ui-avatars.com/api/?name=$name&background=random")),
                       if (isMeOnline) Positioned(right: 2, bottom: 2, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2.5)))),
                     ],
                   ),
@@ -606,6 +588,30 @@ class _RoomListPageState extends State<RoomListPage> {
     await _firestore.collection('users').doc(targetUserId).update({'incomingRequests': FieldValue.arrayUnion([widget.username])});
     await _firestore.collection('users').doc(widget.username).update({'outgoingRequests': FieldValue.arrayUnion([targetUserId])});
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã gửi lời mời kết bạn!")));
+  }
+
+  Future<void> _unfriend(String targetUserId) async {
+    await _firestore.collection('users').doc(widget.username).update({'friends': FieldValue.arrayRemove([targetUserId])});
+    await _firestore.collection('users').doc(targetUserId).update({'friends': FieldValue.arrayRemove([widget.username])});
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã hủy kết bạn")));
+  }
+
+  Future<void> _acceptFriend(String targetUserId) async {
+    await _firestore.collection('users').doc(widget.username).update({
+      'friends': FieldValue.arrayUnion([targetUserId]),
+      'incomingRequests': FieldValue.arrayRemove([targetUserId])
+    });
+    await _firestore.collection('users').doc(targetUserId).update({
+      'friends': FieldValue.arrayUnion([widget.username]),
+      'outgoingRequests': FieldValue.arrayRemove([widget.username])
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã chấp nhận lời mời kết bạn")));
+  }
+
+  Future<void> _declineFriend(String targetUserId) async {
+    await _firestore.collection('users').doc(widget.username).update({'incomingRequests': FieldValue.arrayRemove([targetUserId])});
+    await _firestore.collection('users').doc(targetUserId).update({'outgoingRequests': FieldValue.arrayRemove([widget.username])});
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã từ chối lời mời kết bạn")));
   }
 
   void _handleOpenGame(String type) {
