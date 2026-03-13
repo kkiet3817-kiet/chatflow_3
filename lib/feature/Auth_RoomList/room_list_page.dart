@@ -2,11 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-<<<<<<< HEAD
 import 'package:audioplayers/audioplayers.dart';
-=======
 import 'package:firebase_messaging/firebase_messaging.dart';
->>>>>>> 6d7c6d557524e8649adaae3ce38bbcef98b392b4
 import 'chat_page.dart';
 import 'login_page.dart';
 import 'create_group_page.dart';
@@ -272,11 +269,7 @@ class _RoomListPageState extends State<RoomListPage> {
   Widget build(BuildContext context) {
     bool isProfileTab = _selectedIndex == 2;
     return Scaffold(
-
-      backgroundColor: isProfileTab ? Colors.white : bgColor, 
-
       backgroundColor: isProfileTab ? Colors.white : bgColor,
-main
       bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: Column(

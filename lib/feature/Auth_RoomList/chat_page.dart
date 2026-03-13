@@ -199,7 +199,6 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) { debugPrint("Lỗi phát âm thanh: $e"); }
   }
 
-
   Future<void> _sendPushNotification(String receiverId, String body) async {
     try {
       final userDoc = await _firestore.collection('users').doc(receiverId).get();

@@ -7,22 +7,16 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.CAMERA"/>
-<<<<<<< HEAD
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-=======
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
->>>>>>> 6d7c6d557524e8649adaae3ce38bbcef98b392b4
 
     <application
         android:label="ChatFlow"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-<<<<<<< HEAD
-        android:requestLegacyExternalStorage="true">
-=======
+        android:requestLegacyExternalStorage="true"
         android:allowBackup="true">
 
->>>>>>> 6d7c6d557524e8649adaae3ce38bbcef98b392b4
         <activity
             android:name="com.example.chatflo.MainActivity"
             android:exported="true"

@@ -18,7 +18,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 // Key để điều khiển Messenger
 final GlobalKey<ScaffoldMessengerState> snackbarKey = GlobalKey<ScaffoldMessengerState>();
- main
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -137,13 +136,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     setState(() {
       _currentUsername = prefs.getString('username');
     });
-    if (_currentUsername != null) _setOnlineStatus(true);
-
-    _currentUsername = prefs.getString('username');
     if (_currentUsername != null) {
       _setOnlineStatus(true);
     }
- main
   }
 
   void _setOnlineStatus(bool isOnline) {
