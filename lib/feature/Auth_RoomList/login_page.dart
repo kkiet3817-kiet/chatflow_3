@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'room_list_page.dart';
 import '../LocalStorage_RealtimeLogic/data/datasources/local_message_datasource.dart';
 
@@ -34,6 +35,20 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // Hàm cập nhật FCM Token lên Firestore
+  Future<void> _updateFCMToken(String username) async {
+    try {
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await _firestore.collection('users').doc(username).update({
+          'fcmToken': token,
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi cập nhật Token: $e");
+    }
+  }
+
   void handleAuth() async {
     String user = userController.text.trim().toLowerCase();
     String pass = passController.text.trim();
@@ -43,7 +58,6 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // --- THÊM KIỂM TRA ĐỂ CHẶN RÁC ---
     if (isRegisterMode) {
       if (user.length < 4) {
         _showSnackBar("Tên đăng nhập phải có ít nhất 4 ký tự", Colors.orange);
@@ -75,6 +89,9 @@ class _LoginPageState extends State<LoginPage> {
           'isOnline': false,
           'displayName': user,
         });
+        
+        await _updateFCMToken(user); // Cập nhật token ngay khi đăng ký
+
         _showSnackBar("Đăng ký thành công!", Colors.green);
         setState(() => isRegisterMode = false);
       }
@@ -86,6 +103,9 @@ class _LoginPageState extends State<LoginPage> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('username', user);
           await _db.register(user, pass); 
+          
+          await _updateFCMToken(user); // Cập nhật token khi đăng nhập
+
           if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => RoomListPage(username: user)));
         } else {
           _showSnackBar("Sai mật khẩu!", Colors.redAccent);

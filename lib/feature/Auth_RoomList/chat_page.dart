@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -14,6 +15,7 @@ import '../Chess/chess_game_page.dart';
 import '../Caro/caro_game_page.dart';
 import '../BlockBlast/block_blast_game_page.dart';
 import 'group_info_page.dart';
+import 'fcm_service.dart'; 
 
 class ChatPage extends StatefulWidget {
   final String receiverName;
@@ -32,7 +34,6 @@ class ChatPage extends StatefulWidget {
   });
 
   @override
-
   State<ChatPage> createState() => _ChatPageState();
 }
 
@@ -62,7 +63,6 @@ class _ChatPageState extends State<ChatPage> {
   List<Map<String, dynamic>> _groupMembers = [];
   bool _showTagSuggestions = false;
 
-  // Quản lý subscriptions để tránh memory leak
   StreamSubscription? _themeSub;
   StreamSubscription? _blockMeSub;
   StreamSubscription? _blockOtherSub;
@@ -199,6 +199,25 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) { debugPrint("Lỗi phát âm thanh: $e"); }
   }
 
+
+  Future<void> _sendPushNotification(String receiverId, String body) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(receiverId).get();
+      if (!userDoc.exists) return;
+      String? fcmToken = userDoc.data()?['fcmToken'];
+      if (fcmToken == null) return;
+
+      final senderDoc = await _firestore.collection('users').doc(widget.currentUserId).get();
+      String senderName = senderDoc.data()?['displayName'] ?? widget.currentUserId;
+
+      await FCMService.sendNotification(
+        fcmToken: fcmToken,
+        title: senderName,
+        body: body,
+      );
+    } catch (e) { debugPrint("Lỗi gửi thông báo: $e"); }
+  }
+
   void _updateTheme(Color color) {
     _firestore.collection('conversations').doc(currentRoomId).set({'themeColor': color.toARGB32()}, SetOptions(merge: true));
     if (mounted) Navigator.pop(context);
@@ -268,6 +287,7 @@ class _ChatPageState extends State<ChatPage> {
         finalContent = "🎮 Lời mời chơi game";
       }
     }
+    
     await _firestore.collection('messages').doc(msgId).set({
       'id': msgId, 'senderId': widget.currentUserId, 'receiverId': widget.isGroup ? "group" : widget.receiverName,
       'roomId': currentRoomId, 'content': finalContent, 'imageUrl': imageUrl, 'audioUrl': audioUrl,
@@ -285,8 +305,14 @@ class _ChatPageState extends State<ChatPage> {
 
     if (widget.isGroup) {
       convUpdate['name'] = widget.receiverName;
+      for (var member in _groupMembers) {
+        if (member['username'] != widget.currentUserId) {
+          _sendPushNotification(member['username'], finalContent);
+        }
+      }
     } else {
       convUpdate['participants'] = [widget.currentUserId, widget.receiverName];
+      _sendPushNotification(widget.receiverName, finalContent);
     }
 
     await _firestore.collection('conversations').doc(currentRoomId).set(convUpdate, SetOptions(merge: true));
@@ -370,7 +396,7 @@ class _ChatPageState extends State<ChatPage> {
         backgroundColor: Colors.white,
         appBar: _buildAppBar(),
         body: Container(
-          decoration: _backgroundUrl != null ? BoxDecoration(image: DecorationImage(image: NetworkImage(_backgroundUrl!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.1), BlendMode.darken))) : null,
+          decoration: _backgroundUrl != null ? BoxDecoration(image: DecorationImage(image: NetworkImage(_backgroundUrl!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.1), BlendMode.darken))) : null,
           child: Column(
             children: [
               Expanded(child: _buildMessageList()),
@@ -395,6 +421,7 @@ class _ChatPageState extends State<ChatPage> {
         child: Row(
           children: [
             IconButton(icon: Icon(Icons.add_circle, color: _themeColor), onPressed: _showAttachmentMenu),
+            IconButton(icon: Icon(Icons.image, color: _themeColor), onPressed: () => _pickAndUploadImage(ImageSource.gallery)),
             IconButton(icon: Icon(Icons.camera_alt, color: _themeColor), onPressed: () => _pickAndUploadImage(ImageSource.camera)),
             GestureDetector(
               onLongPress: _startRecording,
@@ -530,14 +557,13 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _buildMessageList() => StreamBuilder<QuerySnapshot>(stream: _firestore.collection('messages').where('roomId', isEqualTo: currentRoomId).orderBy('createdAt', descending: false).snapshots(), builder: (context, snapshot) { if (!snapshot.hasData) return const Center(child: CircularProgressIndicator()); final messages = snapshot.data!.docs.map((doc) => MessageModel.fromJson(doc.data() as Map<String, dynamic>)).toList(); WidgetsBinding.instance.addPostFrameCallback((_) { _markMessagesAsSeen(); _scrollToBottom(); }); return ListView.builder(controller: _scrollController, itemCount: messages.length, itemBuilder: (context, i) => _buildMessageItem(messages[i], i == messages.length - 1)); });
   
-  void _showAttachmentMenu() => showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 120, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-    _attachmentItem(Icons.image, "Ảnh", Colors.purple, () { Navigator.pop(context); _pickAndUploadImage(ImageSource.gallery); }),
-    _attachmentItem(Icons.videogame_asset, "Cờ Vua", Colors.orange, () { Navigator.pop(context); _sendMessage(type: 'chess_invite'); }),
-    _attachmentItem(Icons.grid_3x3, "Caro", Colors.blue, () { Navigator.pop(context); _sendMessage(type: 'caro_invite'); }),
-    _attachmentItem(Icons.extension, "Block", Colors.teal, () { Navigator.pop(context); _sendMessage(type: 'block_invite'); }),
+  void _showAttachmentMenu() => showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 150, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+    _buildMenuOption(Icons.videogame_asset, "Cờ Vua", Colors.orange, () => _sendMessage(type: 'chess_invite')),
+    _buildMenuOption(Icons.grid_3x3, "Caro", Colors.blue, () => _sendMessage(type: 'caro_invite')),
+    _buildMenuOption(Icons.apps, "Block Blast", Colors.green, () => _sendMessage(type: 'block_blast_invite')),
   ])));
 
-  Widget _attachmentItem(IconData i, String l, Color c, VoidCallback o) => Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: Icon(i, color: c, size: 30), onPressed: o), Text(l)]);
+  Widget _buildMenuOption(IconData icon, String label, Color color, VoidCallback onTap) => GestureDetector(onTap: () { Navigator.pop(context); onTap(); }, child: Column(mainAxisSize: MainAxisSize.min, children: [CircleAvatar(backgroundColor: color.withOpacity(0.1), radius: 25, child: Icon(icon, color: color, size: 30)), const SizedBox(height: 5), Text(label, style: const TextStyle(fontSize: 12))]));
 
   void _showMessageOptions(MessageModel m) {
     bool isMe = m.senderId.toLowerCase() == widget.currentUserId.toLowerCase();
@@ -557,19 +583,19 @@ class _ChatPageState extends State<ChatPage> {
   void _handleReaction(String msgId, String emoji) { _firestore.collection('messages').doc(msgId).update({'reaction': emoji}); Navigator.pop(context); }
 
   Widget _buildGameInviteUI(MessageModel m, bool isMe) { 
-    Color gc = Colors.blue;
-    if (m.type == 'chess_invite') gc = Colors.orange;
-    if (m.type == 'block_invite') gc = Colors.teal;
+    IconData icon = Icons.videogame_asset; Color gc = Colors.orange;
+    if (m.type == 'caro_invite') { icon = Icons.grid_3x3; gc = Colors.blue; }
+    else if (m.type == 'block_blast_invite') { icon = Icons.apps; gc = Colors.green; }
 
-    return SizedBox(width: 180, child: Column(children: [Icon(m.type == 'chess_invite' ? Icons.videogame_asset : (m.type == 'caro_invite' ? Icons.grid_3x3 : Icons.extension), color: isMe ? Colors.white : gc, size: 30), Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () { 
-      if (m.type == 'chess_invite') {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ChessGamePage(roomId: "chess_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
-      } else if (m.type == 'caro_invite') {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
-      } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => BlockBlastGamePage(roomId: "block_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
-      }
-    }, child: const Text("CHẤP NHẬN"))])); 
+    return SizedBox(width: 180, child: Column(children: [
+      Icon(icon, color: isMe ? Colors.white : gc, size: 30), 
+      Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), 
+      ElevatedButton(onPressed: () { 
+        if (m.type == 'chess_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => ChessGamePage(roomId: "chess_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
+        else if (m.type == 'caro_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
+        else if (m.type == 'block_blast_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => BlockBlastGamePage(roomId: "block_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
+      }, child: const Text("CHẤP NHẬN"))
+    ])); 
   }
 
   Future<void> _pickAndUploadImage(ImageSource source) async { 
@@ -603,6 +629,6 @@ class _ChatPageState extends State<ChatPage> {
 
   void _showNicknameDialog() {
     TextEditingController nickController = TextEditingController(text: _nicknames[widget.receiverName] ?? "");
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Đặt biệt danh"), content: TextField(controller: nickController, decoration: const InputDecoration(hintText: "Nhập biệt danh...")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("HỦY")), TextButton(onPressed: () async { String nick = nickController.text.trim(); if (nick.isEmpty) { _nicknames.remove(widget.receiverName); } else { _nicknames[widget.receiverName] = nick; } await _firestore.collection('conversations').doc(currentRoomId).set({'nicknames': _nicknames}, SetOptions(merge: true)); if (context.mounted) { FocusScope.of(context).unfocus(); Navigator.pop(context); } }, child: const Text("LƯU"))]));
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Đặt biệt danh"), content: TextField(controller: nickController, decoration: const InputDecoration(hintText: "Nhập biệt danh...")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("HỦY")), TextButton(onPressed: () async { String nick = nickController.text.trim(); if (nick.isEmpty) { _nicknames.remove(widget.receiverName); } else { _nicknames[widget.receiverName] = nick; } await _firestore.collection('conversations').doc(currentRoomId).set({'nicknames': _nicknames}, SetOptions(merge: true)); if (mounted) { FocusScope.of(context).unfocus(); Navigator.pop(context); } }, child: const Text("LƯU"))]));
   }
 }

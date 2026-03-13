@@ -7,22 +7,33 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.CAMERA"/>
+<<<<<<< HEAD
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+=======
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+>>>>>>> 6d7c6d557524e8649adaae3ce38bbcef98b392b4
 
     <application
         android:label="ChatFlow"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+<<<<<<< HEAD
         android:requestLegacyExternalStorage="true">
+=======
+        android:allowBackup="true">
+
+>>>>>>> 6d7c6d557524e8649adaae3ce38bbcef98b392b4
         <activity
             android:name="com.example.chatflo.MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleInstance"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:allowEmbedded="true"
+            android:resizeableActivity="true">
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
@@ -32,6 +43,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
