@@ -59,7 +59,6 @@ class _ChessGamePageState extends State<ChessGamePage> {
       if (snapshot.exists && snapshot.data() != null) {
         var data = snapshot.data()!;
         
-        // Kiểm tra trạng thái đầu hàng hoặc kết thúc đặc biệt
         if (data['status'] == 'resigned') {
           String winner = data['winner'];
           _showEndGameDialog("TRẬN ĐẤU KẾT THÚC", winner == widget.currentUserId ? "Đối thủ đã đầu hàng. Bạn thắng!" : "Bạn đã đầu hàng.");
@@ -272,12 +271,8 @@ class _ChessGamePageState extends State<ChessGamePage> {
                   enableUserMoves: myTurn && !_isGameOver,
                 ),
               ),
-<<<<<<< Updated upstream
-              Container(
-=======
               // LỚP PHỦ TRONG SUỐT ĐỂ NHẬN DIỆN CÚ NHẤN VÀ VẼ CHẤM GỢI Ý
               SizedBox(
->>>>>>> Stashed changes
                 width: boardSize,
                 height: boardSize,
                 child: GridView.builder(
@@ -295,10 +290,6 @@ class _ChessGamePageState extends State<ChessGamePage> {
                     return GestureDetector(
                       onTap: () => _onSquareTap(square),
                       child: Container(
-<<<<<<< Updated upstream
-                        decoration: BoxDecoration(color: isSelected ? Colors.yellow.withOpacity(0.3) : Colors.transparent),
-                        child: Center(child: isHint ? Container(width: 15, height: 15, decoration: BoxDecoration(color: Colors.black26, shape: BoxShape.circle)) : const SizedBox()),
-=======
                         decoration: BoxDecoration(
                           color: isSelected ? Colors.yellow.withValues(alpha: 0.3) : Colors.transparent,
                         ),
@@ -310,7 +301,6 @@ class _ChessGamePageState extends State<ChessGamePage> {
                               ) 
                             : const SizedBox(),
                         ),
->>>>>>> Stashed changes
                       ),
                     );
                   },

@@ -13,6 +13,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../LocalStorage_RealtimeLogic/data/models/message_model.dart';
 import '../Chess/chess_game_page.dart';
 import '../Caro/caro_game_page.dart';
+import '../BlockBlast/block_blast_game_page.dart';
 import 'group_info_page.dart';
 
 class ChatPage extends StatefulWidget {
@@ -51,7 +52,7 @@ class _ChatPageState extends State<ChatPage> {
   MessageModel? _replyingTo;
   MessageModel? _editingMessage;
   Color _themeColor = Colors.blueAccent;
-  String? _bgImage;
+  String? _backgroundUrl;
   Map<String, dynamic> _nicknames = {};
 
   bool _isBlockedByMe = false;
@@ -82,11 +83,8 @@ class _ChatPageState extends State<ChatPage> {
   void dispose() {
     if (_isCurrentlyTyping) _setTypingStatus(false);
     _typingTimer?.cancel();
-<<<<<<< Updated upstream
     _audioRecorder.dispose();
     _audioPlayer.dispose();
-=======
->>>>>>> Stashed changes
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -98,7 +96,7 @@ class _ChatPageState extends State<ChatPage> {
       final data = snap.data()!;
       setState(() {
         _themeColor = data['themeColor'] != null ? Color(data['themeColor']) : Colors.blueAccent;
-        _bgImage = data['backgroundImage'];
+        _backgroundUrl = data['backgroundUrl'];
         _nicknames = data['nicknames'] ?? {};
       });
     });
@@ -177,7 +175,6 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-<<<<<<< Updated upstream
   Future<void> _playAudio(String url) async {
     try {
       await _audioPlayer.stop();
@@ -194,56 +191,11 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) { debugPrint("Lỗi phát âm thanh: $e"); }
   }
 
-  void _sendMessage({String? content, String? imageUrl, String? audioUrl, String type = 'text'}) async {
-    if (_isBlockedByMe || _isBlockedByOther) return;
-    if (_editingMessage != null && content != null) {
-      await _firestore.collection('messages').doc(_editingMessage!.id).update({'content': content, 'isEdited': true});
-      _controller.clear();
-      setState(() { _editingMessage = null; _isComposing = false; });
-      return;
-    }
-    if (content == null && imageUrl == null && audioUrl == null && type == 'text') return;
-    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
-    String finalContent = content ?? "";
-    if (finalContent.isEmpty) {
-      if (type == 'image') finalContent = "📷 Hình ảnh";
-      else if (type == 'audio') finalContent = "🎤 Tin nhắn thoại";
-      else if (type.contains('invite')) finalContent = "🎮 Lời mời chơi game";
-    }
-    await _firestore.collection('messages').doc(msgId).set({
-      'id': msgId, 'senderId': widget.currentUserId, 'receiverId': widget.isGroup ? "group" : widget.receiverName,
-      'roomId': currentRoomId, 'content': finalContent, 'imageUrl': imageUrl, 'audioUrl': audioUrl,
-      'createdAt': DateTime.now().toIso8601String(), 'isUnsent': false, 'isLiked': false, 'isSeen': false,
-      'type': type, 'replyTo': _replyingTo?.toJson(),
-    });
-
-    Map<String, dynamic> convUpdate = {
-      'id': currentRoomId, 
-      'lastMessage': finalContent, 
-      'lastSenderId': widget.currentUserId, 
-      'updatedAt': FieldValue.serverTimestamp(),
-      'type': widget.isGroup ? 'group' : '1on1',
-    };
-
-    if (widget.isGroup) {
-      convUpdate['name'] = widget.receiverName;
-    } else {
-      convUpdate['participants'] = [widget.currentUserId, widget.receiverName];
-    }
-
-    await _firestore.collection('conversations').doc(currentRoomId).set(convUpdate, SetOptions(merge: true));
-
-    _controller.clear();
-    if (_isCurrentlyTyping) { _isCurrentlyTyping = false; _setTypingStatus(false); }
-    setState(() { _isComposing = false; _replyingTo = null; });
-    _scrollToBottom();
-=======
-  void _changeTheme(Color color) {
+  void _updateTheme(Color color) {
     _firestore.collection('conversations').doc(currentRoomId).set({'themeColor': color.toARGB32()}, SetOptions(merge: true));
     if (mounted) Navigator.pop(context);
   }
 
-  // --- THAY ĐỔI PHÔNG NỀN & ẢNH ĐẠI DIỆN ---
   Future<void> _changeBackground() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (image == null) return;
@@ -284,7 +236,57 @@ class _ChatPageState extends State<ChatPage> {
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
->>>>>>> Stashed changes
+  }
+
+  void _sendMessage({String? content, String? imageUrl, String? audioUrl, String type = 'text'}) async {
+    if (_isBlockedByMe || _isBlockedByOther) return;
+    if (_editingMessage != null && content != null) {
+      await _firestore.collection('messages').doc(_editingMessage!.id).update({'content': content, 'isEdited': true});
+      _controller.clear();
+      FocusScope.of(context).unfocus();
+      setState(() { _editingMessage = null; _isComposing = false; });
+      return;
+    }
+    if (content == null && imageUrl == null && audioUrl == null && type == 'text') return;
+    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
+    String finalContent = content ?? "";
+    if (finalContent.isEmpty) {
+      if (type == 'image') {
+        finalContent = "📷 Hình ảnh";
+      } else if (type == 'audio') {
+        finalContent = "🎤 Tin nhắn thoại";
+      } else if (type.contains('invite')) {
+        finalContent = "🎮 Lời mời chơi game";
+      }
+    }
+    await _firestore.collection('messages').doc(msgId).set({
+      'id': msgId, 'senderId': widget.currentUserId, 'receiverId': widget.isGroup ? "group" : widget.receiverName,
+      'roomId': currentRoomId, 'content': finalContent, 'imageUrl': imageUrl, 'audioUrl': audioUrl,
+      'createdAt': DateTime.now().toIso8601String(), 'isUnsent': false, 'isLiked': false, 'isSeen': false,
+      'type': type, 'replyTo': _replyingTo?.toJson(),
+    });
+
+    Map<String, dynamic> convUpdate = {
+      'id': currentRoomId, 
+      'lastMessage': finalContent, 
+      'lastSenderId': widget.currentUserId, 
+      'updatedAt': FieldValue.serverTimestamp(),
+      'type': widget.isGroup ? 'group' : '1on1',
+    };
+
+    if (widget.isGroup) {
+      convUpdate['name'] = widget.receiverName;
+    } else {
+      convUpdate['participants'] = [widget.currentUserId, widget.receiverName];
+    }
+
+    await _firestore.collection('conversations').doc(currentRoomId).set(convUpdate, SetOptions(merge: true));
+
+    _controller.clear();
+    FocusScope.of(context).unfocus();
+    if (_isCurrentlyTyping) { _isCurrentlyTyping = false; _setTypingStatus(false); }
+    setState(() { _isComposing = false; _replyingTo = null; });
+    _scrollToBottom();
   }
 
   void _onTextChanged(String value) {
@@ -292,54 +294,8 @@ class _ChatPageState extends State<ChatPage> {
     if (!_isCurrentlyTyping && value.trim().isNotEmpty) { _isCurrentlyTyping = true; _setTypingStatus(true); }
     else if (value.trim().isEmpty && _isCurrentlyTyping) { _isCurrentlyTyping = false; _setTypingStatus(false); }
     _typingTimer?.cancel();
-<<<<<<< Updated upstream
     _typingTimer = Timer(const Duration(seconds: 3), () {
       if (mounted && _isCurrentlyTyping) { _isCurrentlyTyping = false; _setTypingStatus(false); }
-=======
-    _typingTimer = Timer(const Duration(seconds: 2), () => _setTypingStatus(false));
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-    }
-  }
-
-  Future<void> _pickAndUploadImage(ImageSource source) async {
-    if (_isBlockedByMe || _isBlockingMe) return;
-    final XFile? image = await _picker.pickImage(source: source, imageQuality: 70);
-    if (image == null) return;
-    setState(() => _isUploading = true);
-    try {
-      String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
-      Reference ref = _storage.ref().child("chat_images").child(currentRoomId).child(fileName);
-      await ref.putFile(File(image.path));
-      String url = await ref.getDownloadURL();
-      _sendMessage(imageUrl: url, type: 'image');
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Lỗi: $e")));
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
-  }
-
-  void _sendMessage({String? content, String? imageUrl, String type = 'text'}) async {
-    if (_isBlockedByMe || _isBlockingMe) return;
-    if (content == null && imageUrl == null && type == 'text') return;
-    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
-    final now = DateTime.now().toIso8601String();
-    
-    String finalContent = content ?? "";
-    if (type == 'image') finalContent = "📷 Hình ảnh";
-    if (type == 'chess_invite') finalContent = "🎮 Mời chơi Cờ Vua";
-    if (type == 'caro_invite') finalContent = "🏁 Mời chơi Caro";
-    if (content == "👍") finalContent = "👍";
-
-    await _firestore.collection('messages').doc(msgId).set({
-      'id': msgId, 'senderId': widget.currentUserId, 'receiverId': widget.isGroup ? "group" : widget.receiverName,
-      'roomId': currentRoomId, 'content': finalContent, 'imageUrl': imageUrl, 'createdAt': now,
-      'isUnsent': false, 'isLiked': false, 'isSeen': false, 'type': type, 'replyTo': _replyingTo?.toJson(),
->>>>>>> Stashed changes
     });
   }
 
@@ -351,10 +307,28 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _scrollToBottom() { if (_scrollController.hasClients) _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); }
+  
   void _markMessagesAsSeen() {
     String receiverField = widget.isGroup ? "group" : widget.currentUserId;
     _firestore.collection('messages').where('roomId', isEqualTo: currentRoomId).where('receiverId', isEqualTo: receiverField).where('isSeen', isEqualTo: false).get().then((snapshot) {
       for (var doc in snapshot.docs) { if (doc['senderId'] != widget.currentUserId) doc.reference.update({'isSeen': true}); }
+    });
+  }
+
+  void _makeCall(bool isVideo) async {
+    if (_isBlockedByMe || _isBlockedByOther) return;
+    final callId = DateTime.now().millisecondsSinceEpoch.toString();
+    _sendMessage(
+      type: isVideo ? 'video_call' : 'audio_call',
+      content: isVideo ? "Bắt đầu cuộc gọi video" : "Bắt đầu cuộc gọi thoại",
+    );
+    await _firestore.collection('calls').doc(callId).set({
+      'callerId': widget.currentUserId,
+      'receiverId': widget.receiverName,
+      'type': isVideo ? 'video' : 'audio',
+      'status': 'ringing',
+      'createdAt': FieldValue.serverTimestamp(),
+      'roomId': currentRoomId,
     });
   }
 
@@ -380,152 +354,29 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-<<<<<<< Updated upstream
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: Container(
-        decoration: _bgImage != null ? BoxDecoration(image: DecorationImage(image: NetworkImage(_bgImage!), fit: BoxFit.cover)) : null,
-=======
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('conversations').doc(currentRoomId).snapshots(),
-      builder: (context, snapshot) {
-        String? backgroundUrl;
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          backgroundUrl = data['backgroundUrl'];
-        }
-
-        return Scaffold(
-          backgroundColor: Colors.white,
-          appBar: _buildAppBar(),
-          body: Container(
-            decoration: backgroundUrl != null ? BoxDecoration(
-              image: DecorationImage(
-                image: NetworkImage(backgroundUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.1), BlendMode.darken),
-              ),
-            ) : null,
-            child: Column(
-              children: [
-                Expanded(child: _buildMessageList()),
-                _buildTypingIndicator(),
-                if (_isUploading) const LinearProgressIndicator(),
-                if (_replyingTo != null) _buildReplyPreview(),
-                _isBlockedByMe || _isBlockingMe ? _buildBlockedArea() : _buildInputArea(),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBlockedArea() {
-    return Container(width: double.infinity, padding: const EdgeInsets.all(25), color: const Color(0xFFF8FAFC), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.block_flipped, color: Colors.grey.shade400, size: 40), const SizedBox(height: 10), Text(_isBlockedByMe ? "Bạn đã chặn người dùng này." : "Người dùng này hiện không khả dụng.", textAlign: TextAlign.center, style: TextStyle(color: Colors.blueGrey.shade400, fontWeight: FontWeight.bold)), if (_isBlockedByMe) ...[const SizedBox(height: 10), TextButton(onPressed: _toggleBlock, child: const Text("BỎ CHẶN", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)))]]));
-  }
-
-  Widget _buildTypingIndicator() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('conversations').doc(currentRoomId).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
-        Map typingMap = (snapshot.data!.data() as Map)['typing'] ?? {};
-        bool anyoneTyping = typingMap.keys.any((uid) => uid != widget.currentUserId && typingMap[uid] == true);
-        if (!anyoneTyping) return const SizedBox();
-        return Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5), child: Row(children: [const Text("Đang soạn tin", style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)), const SizedBox(width: 5), SizedBox(width: 20, child: LinearProgressIndicator(backgroundColor: Colors.transparent, color: _themeColor, minHeight: 2))]));
-      },
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      elevation: 0.5, backgroundColor: Colors.white,
-      leading: IconButton(icon: Icon(Icons.arrow_back, color: _themeColor), onPressed: () => Navigator.pop(context)),
-      title: StreamBuilder<DocumentSnapshot>(
-        stream: _firestore.collection(widget.isGroup ? 'groups' : 'users').doc(widget.isGroup ? currentRoomId : widget.receiverName).snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const SizedBox();
-          final d = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-          String name = d['name'] ?? d['displayName'] ?? widget.receiverName;
-          String sub = widget.isGroup ? "${(d['members'] as List).length} thành viên" : (d['isOnline'] == true ? "Đang hoạt động" : "Ngoại tuyến");
-          String avatarUrl = d['avatarUrl'] ?? "https://ui-avatars.com/api/?name=$name&background=random";
-          
-          return Row(children: [
-            CircleAvatar(radius: 18, backgroundImage: NetworkImage(avatarUrl)),
-            const SizedBox(width: 10),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)), Text(sub, style: TextStyle(color: sub.contains("động") ? Colors.green : Colors.grey, fontSize: 11))]),
-          ]);
-        },
-      ),
-      actions: [
-        if (!widget.isGroup) ...[IconButton(icon: Icon(Icons.phone, color: _themeColor), onPressed: () => _makeCall(false)), IconButton(icon: Icon(Icons.videocam, color: _themeColor), onPressed: () => _makeCall(true))],
-        PopupMenuButton(
-          icon: Icon(Icons.more_vert, color: _themeColor),
-          itemBuilder: (context) => [
-            if (widget.isGroup) const PopupMenuItem(value: 'info', child: Text("Thông tin nhóm")),
-            const PopupMenuItem(value: 'background', child: Text("Đổi phông nền")),
-            const PopupMenuItem(value: 'avatar', child: Text("Đổi ảnh đại diện")),
-            if (!widget.isGroup) PopupMenuItem(value: 'block', child: Text(_isBlockedByMe ? "Bỏ chặn" : "Chặn")),
-            const PopupMenuItem(value: 'theme', child: Text("Đổi màu chủ đề")),
-          ],
-          onSelected: (v) { 
-            if (v == 'info') Navigator.push(context, MaterialPageRoute(builder: (_) => GroupInfoPage(groupId: currentRoomId, currentUserId: widget.currentUserId))); 
-            if (v == 'background') _changeBackground();
-            if (v == 'avatar') _changeAvatar();
-            if (v == 'block') _toggleBlock(); 
-            if (v == 'theme') _showThemePicker(); 
-          },
-        )
-      ],
-    );
-  }
-
-  void _showThemePicker() {
-    final colors = [Colors.blueAccent, Colors.redAccent, Colors.purpleAccent, Colors.greenAccent, Colors.orangeAccent, Colors.pinkAccent, Colors.cyan];
-    showModalBottomSheet(context: context, builder: (context) => Container(height: 150, padding: const EdgeInsets.all(20), child: Column(children: [const Text("Chọn màu chủ đề", style: TextStyle(fontWeight: FontWeight.bold)), const SizedBox(height: 20), Expanded(child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: colors.length, itemBuilder: (context, i) => GestureDetector(onTap: () => _changeTheme(colors[i]), child: Container(width: 50, height: 50, margin: const EdgeInsets.symmetric(horizontal: 5), decoration: BoxDecoration(color: colors[i], shape: BoxShape.circle)))))])));
-  }
-
-  Widget _buildMessageList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore.collection('messages').where('roomId', isEqualTo: currentRoomId).orderBy('createdAt', descending: false).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final messages = snapshot.data!.docs.map((doc) => MessageModel.fromJson(doc.data() as Map<String, dynamic>)).toList();
-        _markMessagesAsSeen(); WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-        return ListView.builder(controller: _scrollController, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16), itemCount: messages.length, itemBuilder: (context, i) => _buildMessageItem(messages[i], i == messages.length - 1));
-      },
-    );
-  }
-
-  Widget _buildMessageItem(MessageModel m, bool isLast) {
-    bool isMe = m.senderId == widget.currentUserId;
-    String timeStr = DateFormat('HH:mm').format(m.createdAt);
-    bool isGame = m.type.contains('invite');
-    bool isCall = m.type.contains('call');
-
     return GestureDetector(
-      onLongPress: () => _showMessageOptions(m),
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
->>>>>>> Stashed changes
-        child: Column(
-          children: [
-            Expanded(child: _buildMessageList()),
-            if (_showTagSuggestions) _buildTagList(),
-            _buildTypingIndicator(),
-            if (_isUploading) const LinearProgressIndicator(),
-            if (_replyingTo != null) _buildReplyPreview(),
-            if (_editingMessage != null) _buildEditPreview(),
-            _isBlockedByMe || _isBlockedByOther ? _buildBlockedArea() : _buildInputArea(),
-          ],
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: _buildAppBar(),
+        body: Container(
+          decoration: _backgroundUrl != null ? BoxDecoration(image: DecorationImage(image: NetworkImage(_backgroundUrl!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.1), BlendMode.darken))) : null,
+          child: Column(
+            children: [
+              Expanded(child: _buildMessageList()),
+              if (_showTagSuggestions) _buildTagList(),
+              _buildTypingIndicator(),
+              if (_isUploading) const LinearProgressIndicator(),
+              if (_replyingTo != null) _buildReplyPreview(),
+              if (_editingMessage != null) _buildEditPreview(),
+              _isBlockedByMe || _isBlockedByOther ? _buildBlockedArea() : _buildInputArea(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-<<<<<<< Updated upstream
   Widget _buildInputArea() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -556,12 +407,6 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ),
     );
-=======
-  Widget _buildGameInviteUI(MessageModel m, bool isMe) {
-    Color gameColor = m.type == 'chess_invite' ? Colors.orange : (m.type == 'caro_invite' ? Colors.blue : Colors.cyan);
-    IconData gameIcon = m.type == 'chess_invite' ? Icons.videogame_asset : (m.type == 'caro_invite' ? Icons.grid_3x3 : Icons.extension);
-    return Container(width: 180, padding: const EdgeInsets.all(5), child: Column(children: [Icon(gameIcon, color: isMe ? Colors.white : gameColor, size: 30), const SizedBox(height: 5), Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), const Divider(), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: isMe ? Colors.white24 : gameColor, foregroundColor: Colors.white, elevation: 0, minimumSize: const Size(double.infinity, 36), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { if (m.type == 'chess_invite') { Navigator.push(context, MaterialPageRoute(builder: (_) => ChessGamePage(roomId: "chess_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); } else if (m.type == 'caro_invite') { Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); } else { Navigator.push(context, MaterialPageRoute(builder: (_) => BlockBlastGamePage(roomId: "block_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName, isSolo: false))); } }, child: const Text("CHẤP NHẬN", style: TextStyle(fontWeight: FontWeight.bold)))]));
->>>>>>> Stashed changes
   }
 
   Widget _buildMessageItem(MessageModel m, bool isLast) {
@@ -589,7 +434,7 @@ class _ChatPageState extends State<ChatPage> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                            color: m.isUnsent ? Colors.grey.shade200 : (isMe ? _themeColor : (_bgImage != null ? Colors.white.withOpacity(0.9) : const Color(0xFFF0F0F0))),
+                            color: m.isUnsent ? Colors.grey.shade200 : (isMe ? _themeColor : (const Color(0xFFF0F0F0))),
                             borderRadius: BorderRadius.only(topLeft: const Radius.circular(20), topRight: const Radius.circular(20), bottomLeft: Radius.circular(isMe ? 20 : 4), bottomRight: Radius.circular(isMe ? 4 : 20))
                         ),
                         child: Column(
@@ -637,7 +482,7 @@ class _ChatPageState extends State<ChatPage> {
 
   PreferredSizeWidget _buildAppBar() => AppBar(
       elevation: 0.5, backgroundColor: Colors.white,
-      leading: IconButton(icon: Icon(Icons.arrow_back, color: _themeColor), onPressed: () => Navigator.pop(context)),
+      leading: IconButton(icon: Icon(Icons.arrow_back, color: _themeColor), onPressed: () { FocusScope.of(context).unfocus(); Navigator.pop(context); }),
       title: StreamBuilder<DocumentSnapshot>(
           stream: _firestore.collection(widget.isGroup ? 'groups' : 'users').doc(widget.isGroup ? currentRoomId : widget.receiverName).snapshots(),
           builder: (context, snapshot) {
@@ -649,27 +494,40 @@ class _ChatPageState extends State<ChatPage> {
             return Row(children: [CircleAvatar(radius: 18, backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=$name")), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis), Text(isOnline ? "Đang hoạt động" : "Ngoại tuyến", style: TextStyle(color: isOnline ? Colors.green : Colors.grey, fontSize: 11))]))]);
           }
       ),
-      actions: [PopupMenuButton(icon: Icon(Icons.more_vert, color: _themeColor), itemBuilder: (context) => [
-        if (widget.isGroup) const PopupMenuItem(value: 'info', child: Text("Thông tin nhóm")),
-        if (!widget.isGroup) ...[
-          const PopupMenuItem(value: 'nick', child: Text("Đặt biệt danh")),
-          PopupMenuItem(value: 'block', child: Text(_isBlockedByMe ? "Bỏ chặn" : "Chặn người dùng")),
-        ],
-        const PopupMenuItem(value: 'bg', child: Text("Đổi nền chat")),
-        const PopupMenuItem(value: 'default_bg', child: Text("Nền mặc định")),
-        const PopupMenuItem(value: 'theme', child: Text("Đổi màu chủ đề")),
-      ], onSelected: (v) {
-        if (v == 'info') Navigator.push(context, MaterialPageRoute(builder: (_) => GroupInfoPage(groupId: currentRoomId, currentUserId: widget.currentUserId)));
-        if (v == 'nick') _showNicknameDialog();
-        if (v == 'block') _toggleBlock();
-        if (v == 'bg') _pickAndUploadImage(ImageSource.gallery, isBg: true);
-        if (v == 'default_bg') _firestore.collection('conversations').doc(currentRoomId).update({'backgroundImage': FieldValue.delete()});
-        if (v == 'theme') _showThemePicker();
-      })]
+      actions: [
+        if (!widget.isGroup) ...[IconButton(icon: Icon(Icons.phone, color: _themeColor), onPressed: () => _makeCall(false)), IconButton(icon: Icon(Icons.videocam, color: _themeColor), onPressed: () => _makeCall(true))],
+        PopupMenuButton(icon: Icon(Icons.more_vert, color: _themeColor), itemBuilder: (context) => [
+          if (widget.isGroup) const PopupMenuItem(value: 'info', child: Text("Thông tin nhóm")),
+          if (!widget.isGroup) ...[
+            const PopupMenuItem(value: 'nick', child: Text("Đặt biệt danh")),
+            PopupMenuItem(value: 'block', child: Text(_isBlockedByMe ? "Bỏ chặn" : "Chặn người dùng")),
+          ],
+          const PopupMenuItem(value: 'bg', child: Text("Đổi nền chat")),
+          const PopupMenuItem(value: 'default_bg', child: Text("Nền mặc định")),
+          const PopupMenuItem(value: 'avatar', child: Text("Đổi ảnh đại diện")),
+          const PopupMenuItem(value: 'theme', child: Text("Đổi màu chủ đề")),
+        ], onSelected: (v) {
+          if (v == 'info') Navigator.push(context, MaterialPageRoute(builder: (_) => GroupInfoPage(groupId: currentRoomId, currentUserId: widget.currentUserId)));
+          if (v == 'nick') _showNicknameDialog();
+          if (v == 'block') _toggleBlock();
+          if (v == 'bg') _changeBackground();
+          if (v == 'default_bg') _firestore.collection('conversations').doc(currentRoomId).update({'backgroundUrl': FieldValue.delete()});
+          if (v == 'avatar') _changeAvatar();
+          if (v == 'theme') _showThemePicker();
+        })
+      ]
   );
 
   Widget _buildMessageList() => StreamBuilder<QuerySnapshot>(stream: _firestore.collection('messages').where('roomId', isEqualTo: currentRoomId).orderBy('createdAt', descending: false).snapshots(), builder: (context, snapshot) { if (!snapshot.hasData) return const Center(child: CircularProgressIndicator()); final messages = snapshot.data!.docs.map((doc) => MessageModel.fromJson(doc.data() as Map<String, dynamic>)).toList(); WidgetsBinding.instance.addPostFrameCallback((_) { _markMessagesAsSeen(); _scrollToBottom(); }); return ListView.builder(controller: _scrollController, itemCount: messages.length, itemBuilder: (context, i) => _buildMessageItem(messages[i], i == messages.length - 1)); });
-  void _showAttachmentMenu() => showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 120, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.image, color: Colors.purple, size: 30), onPressed: () { Navigator.pop(context); _pickAndUploadImage(ImageSource.gallery); }), const Text("Ảnh")]), Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.videogame_asset, color: Colors.orange, size: 30), onPressed: () { Navigator.pop(context); _sendMessage(type: 'chess_invite'); }), const Text("Cờ Vua")]), Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.grid_3x3, color: Colors.blue, size: 30), onPressed: () { Navigator.pop(context); _sendMessage(type: 'caro_invite'); }), const Text("Caro")])])));
+  
+  void _showAttachmentMenu() => showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 120, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+    _attachmentItem(Icons.image, "Ảnh", Colors.purple, () { Navigator.pop(context); _pickAndUploadImage(ImageSource.gallery); }),
+    _attachmentItem(Icons.videogame_asset, "Cờ Vua", Colors.orange, () { Navigator.pop(context); _sendMessage(type: 'chess_invite'); }),
+    _attachmentItem(Icons.grid_3x3, "Caro", Colors.blue, () { Navigator.pop(context); _sendMessage(type: 'caro_invite'); }),
+    _attachmentItem(Icons.extension, "Block", Colors.teal, () { Navigator.pop(context); _sendMessage(type: 'block_invite'); }),
+  ])));
+
+  Widget _attachmentItem(IconData i, String l, Color c, VoidCallback o) => Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: Icon(i, color: c, size: 30), onPressed: o), Text(l)]);
 
   void _showMessageOptions(MessageModel m) {
     bool isMe = m.senderId.toLowerCase() == widget.currentUserId.toLowerCase();
@@ -691,27 +549,50 @@ class _ChatPageState extends State<ChatPage> {
   Widget _buildGameInviteUI(MessageModel m, bool isMe) { 
     Color gc = Colors.blue;
     if (m.type == 'chess_invite') gc = Colors.orange;
+    if (m.type == 'block_invite') gc = Colors.teal;
 
-    return SizedBox(width: 180, child: Column(children: [Icon(m.type == 'chess_invite' ? Icons.videogame_asset : Icons.grid_3x3, color: isMe ? Colors.white : gc, size: 30), Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () { 
-      if (m.type == 'chess_invite') Navigator.push(context, MaterialPageRoute(builder: (_) => ChessGamePage(roomId: "chess_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
-      else Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName))); 
+    return SizedBox(width: 180, child: Column(children: [Icon(m.type == 'chess_invite' ? Icons.videogame_asset : (m.type == 'caro_invite' ? Icons.grid_3x3 : Icons.extension), color: isMe ? Colors.white : gc, size: 30), Text(m.content, style: TextStyle(color: isMe ? Colors.white : Colors.black, fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () { 
+      if (m.type == 'chess_invite') {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => ChessGamePage(roomId: "chess_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
+      } else if (m.type == 'caro_invite') {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => CaroGamePage(roomId: "caro_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
+      } else {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => BlockBlastGamePage(roomId: "block_${m.roomId}", currentUserId: widget.currentUserId, opponentName: widget.receiverName)));
+      }
     }, child: const Text("CHẤP NHẬN"))])); 
   }
-  Future<void> _pickAndUploadImage(ImageSource source, {bool isBg = false}) async { final XFile? image = await _picker.pickImage(source: source, imageQuality: 70); if (image == null) return; setState(() => _isUploading = true); try { String apiKey = "49064342991f8c96b14c94a5fa3fb6c8"; var request = http.MultipartRequest('POST', Uri.parse('https://api.imgbb.com/1/upload')); request.fields['key'] = apiKey; request.files.add(await http.MultipartFile.fromPath('image', image.path)); var response = await request.send(); if (response.statusCode == 200) { String url = json.decode(await response.stream.bytesToString())['data']['url']; if (isBg) await _firestore.collection('conversations').doc(currentRoomId).set({'backgroundImage': url}, SetOptions(merge: true)); else _sendMessage(imageUrl: url, type: 'image'); } } catch (e) { debugPrint("Lỗi upload: $e"); } finally { setState(() => _isUploading = false); } }
-  void _showThemePicker() { final colors = [Colors.blueAccent, Colors.redAccent, Colors.purpleAccent, Colors.greenAccent, Colors.orangeAccent]; showModalBottomSheet(context: context, builder: (context) => Container(height: 100, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: colors.map((c) => GestureDetector(onTap: () { _firestore.collection('conversations').doc(currentRoomId).set({'themeColor': c.value}, SetOptions(merge: true)); Navigator.pop(context); }, child: CircleAvatar(backgroundColor: c))).toList()))); }
+
+  Future<void> _pickAndUploadImage(ImageSource source) async { 
+    final XFile? image = await _picker.pickImage(source: source, imageQuality: 70); 
+    if (image == null) return; 
+    setState(() => _isUploading = true); 
+    try { 
+      String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
+      Reference ref = _storage.ref().child("chat_images").child(currentRoomId).child(fileName);
+      await ref.putFile(File(image.path));
+      String url = await ref.getDownloadURL();
+      _sendMessage(imageUrl: url, type: 'image');
+    } catch (e) { 
+      debugPrint("Lỗi upload: $e"); 
+    } finally { 
+      setState(() => _isUploading = false); 
+    } 
+  }
+
+  void _showThemePicker() { 
+    final colors = [Colors.blueAccent, Colors.redAccent, Colors.purpleAccent, Colors.greenAccent, Colors.orangeAccent]; 
+    showModalBottomSheet(context: context, builder: (context) => Container(height: 100, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: colors.map((c) => GestureDetector(onTap: () => _updateTheme(c), child: CircleAvatar(backgroundColor: c))).toList()))); 
+  }
+
   Widget _buildReplyBubble(MessageModel reply, bool isMe) => Container(margin: const EdgeInsets.only(bottom: 2), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(10), border: const Border(left: BorderSide(color: Colors.blueAccent, width: 3))), child: Text(reply.content, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
   Widget _buildReplyPreview() => Container(padding: const EdgeInsets.all(8), color: Colors.grey.shade50, child: Row(children: [const Icon(Icons.reply, color: Colors.blueAccent), const SizedBox(width: 10), Expanded(child: Text("Đang trả lời: ${_replyingTo!.content}", maxLines: 1)), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyingTo = null))]));
   Widget _buildEditPreview() => Container(padding: const EdgeInsets.all(8), color: Colors.orange.shade50, child: Row(children: [const Icon(Icons.edit, color: Colors.orange), const SizedBox(width: 10), Expanded(child: Text("Đang sửa: ${_editingMessage!.content}", maxLines: 1)), IconButton(icon: const Icon(Icons.close), onPressed: () { _controller.clear(); setState(() => _editingMessage = null); })]));
   Widget _buildBlockedArea() => Container(width: double.infinity, padding: const EdgeInsets.all(20), color: Colors.grey.shade100, child: const Text("Bạn đã chặn hoặc bị người này chặn.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)));
-  Widget _buildTagList() => Container(height: 120, color: Colors.white, child: ListView.builder(itemCount: _groupMembers.length, itemBuilder: (context, i) { final u = _groupMembers[i]; return ListTile(leading: CircleAvatar(radius: 15, backgroundImage: NetworkImage(u['avatarUrl'] ?? "")), title: Text(u['displayName'] ?? u['username']), onTap: () { setState(() { _controller.text = _controller.text.substring(0, _controller.text.lastIndexOf('@')) + "@${u['username']} "; _showTagSuggestions = false; }); }); }));
+  Widget _buildTagList() => Container(height: 120, color: Colors.white, child: ListView.builder(itemCount: _groupMembers.length, itemBuilder: (context, i) { final u = _groupMembers[i]; return ListTile(leading: CircleAvatar(radius: 15, backgroundImage: NetworkImage(u['avatarUrl'] ?? "")), title: Text(u['displayName'] ?? u['username']), onTap: () { setState(() { _controller.text = "${_controller.text.substring(0, _controller.text.lastIndexOf('@'))}@${u['username']} "; _showTagSuggestions = false; }); }); }));
   Widget _buildTypingIndicator() => StreamBuilder<DocumentSnapshot>(stream: _firestore.collection('conversations').doc(currentRoomId).snapshots(), builder: (context, snap) { if (!snap.hasData || !snap.data!.exists) return const SizedBox(); Map typingMap = (snap.data!.data() as Map)['typing'] ?? {}; bool anyoneTyping = typingMap.keys.any((uid) => uid != widget.currentUserId && typingMap[uid] == true); if (!anyoneTyping) return const SizedBox(); return const Padding(padding: EdgeInsets.all(8), child: Text("Đang soạn tin...", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.grey))); });
 
-<<<<<<< Updated upstream
   void _showNicknameDialog() {
     TextEditingController nickController = TextEditingController(text: _nicknames[widget.receiverName] ?? "");
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Đặt biệt danh"), content: TextField(controller: nickController, decoration: const InputDecoration(hintText: "Nhập biệt danh...")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("HỦY")), TextButton(onPressed: () async { String nick = nickController.text.trim(); if (nick.isEmpty) _nicknames.remove(widget.receiverName); else _nicknames[widget.receiverName] = nick; await _firestore.collection('conversations').doc(currentRoomId).set({'nicknames': _nicknames}, SetOptions(merge: true)); if (mounted) Navigator.pop(context); }, child: const Text("LƯU"))]));
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Đặt biệt danh"), content: TextField(controller: nickController, decoration: const InputDecoration(hintText: "Nhập biệt danh...")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("HỦY")), TextButton(onPressed: () async { String nick = nickController.text.trim(); if (nick.isEmpty) { _nicknames.remove(widget.receiverName); } else { _nicknames[widget.receiverName] = nick; } await _firestore.collection('conversations').doc(currentRoomId).set({'nicknames': _nicknames}, SetOptions(merge: true)); if (mounted) { FocusScope.of(context).unfocus(); Navigator.pop(context); } }, child: const Text("LƯU"))]));
   }
-=======
-  Widget _attachmentItem(IconData i, String l, Color c, VoidCallback o) => Column(children: [GestureDetector(onTap: o, child: CircleAvatar(radius: 25, backgroundColor: c.withValues(alpha: 0.1), child: Icon(i, color: c))), const SizedBox(height: 5), Text(l, style: const TextStyle(fontSize: 12))]);
->>>>>>> Stashed changes
 }

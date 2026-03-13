@@ -6,6 +6,7 @@ import 'chat_page.dart';
 import 'login_page.dart';
 import 'create_group_page.dart';
 import 'profile_page.dart';
+import 'story_page.dart';
 import '../Chess/chess_game_page.dart';
 import '../Caro/caro_game_page.dart';
 import '../BlockBlast/block_blast_game_page.dart';
@@ -38,7 +39,7 @@ class _RoomListPageState extends State<RoomListPage> {
       _firestore.collection('users').doc(widget.username).update({
         'isOnline': isOnline,
         'lastSeen': DateTime.now().toIso8601String(),
-      });
+      }).catchError((e) => debugPrint("Error updating status: $e"));
     }
   }
 
@@ -129,17 +130,13 @@ class _RoomListPageState extends State<RoomListPage> {
     bool isProfileTab = _selectedIndex == 2;
 
     return Scaffold(
-      backgroundColor: isProfileTab ? Colors.white : bgColor, // Chuyển nền trắng cho tab cá nhân
+      backgroundColor: isProfileTab ? Colors.white : bgColor,
       bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Chỉ hiện Header nếu KHÔNG PHẢI tab Cá nhân
             if (!isProfileTab) _buildHeader(),
-            
-            // 2. Chỉ hiện Search Bar nếu KHÔNG PHẢI tab Cá nhân
             if (!isProfileTab) _buildSearchBar(),
-            
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -262,6 +259,8 @@ class _RoomListPageState extends State<RoomListPage> {
       return ListView(
         physics: const BouncingScrollPhysics(),
         children: [
+          _buildSectionHeader("Tin", Icons.auto_stories_rounded, onActionTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(currentUserId: widget.username)))),
+          _buildStoryBar(),
           _buildSectionHeader("Trò chơi giải trí", Icons.videogame_asset_rounded),
           _buildGameHub(),
           _buildSectionHeader("Nhóm của tôi", Icons.groups_rounded),
@@ -276,6 +275,94 @@ class _RoomListPageState extends State<RoomListPage> {
     } else {
       return ProfilePage(username: widget.username);
     }
+  }
+
+  Widget _buildStoryBar() {
+    return SizedBox(
+      height: 100,
+      child: StreamBuilder<QuerySnapshot>(
+        stream: _firestore.collection('stories').orderBy('createdAt', descending: true).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const SizedBox();
+          if (!snapshot.hasData) return const SizedBox();
+          
+          final now = DateTime.now();
+          final stories = snapshot.data!.docs.where((doc) {
+            var data = doc.data() as Map<String, dynamic>;
+            if (data['expiresAt'] == null) return true;
+            try {
+              Timestamp expiresAt = data['expiresAt'] is Timestamp 
+                  ? data['expiresAt'] 
+                  : Timestamp.fromDate(DateTime.parse(data['expiresAt'].toString()));
+              return expiresAt.toDate().isAfter(now);
+            } catch (e) {
+              return true; 
+            }
+          }).toList();
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: stories.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(currentUserId: widget.username))),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 15),
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            const CircleAvatar(radius: 30, backgroundColor: Colors.blueAccent, child: Icon(Icons.add, color: Colors.white, size: 30)),
+                            Positioned(right: 0, bottom: 0, child: Container(width: 20, height: 20, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.add_circle, color: Colors.blue, size: 18))),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        const Text("Thêm tin", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              final storyData = stories[index - 1].data() as Map<String, dynamic>;
+              return _buildStoryCircle(storyData);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStoryCircle(Map<String, dynamic> data) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(data['userId']).snapshots(),
+      builder: (context, userSnap) {
+        String avatar = ""; String name = data['userId'];
+        if (userSnap.hasData && userSnap.data!.exists) {
+          final uData = userSnap.data!.data() as Map<String, dynamic>;
+          avatar = uData['avatarUrl'] ?? "";
+          name = uData['displayName'] ?? uData['username'] ?? name;
+        }
+        return GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(currentUserId: widget.username))),
+          child: Container(
+            margin: const EdgeInsets.only(right: 15),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.blue, width: 2)),
+                  child: CircleAvatar(radius: 27, backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=$name")),
+                ),
+                const SizedBox(height: 5),
+                SizedBox(width: 60, child: Text(name, style: const TextStyle(fontSize: 11), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildGameHub() {
@@ -453,7 +540,7 @@ class _RoomListPageState extends State<RoomListPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, IconData icon, {VoidCallback? onActionTap}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(25, 20, 25, 15),
       child: Row(
@@ -462,7 +549,10 @@ class _RoomListPageState extends State<RoomListPage> {
           const SizedBox(width: 10),
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: -0.5)),
           const Spacer(),
-          Text("Xem tất cả", style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+          GestureDetector(
+            onTap: onActionTap,
+            child: Text(onActionTap != null ? "Xem tất cả" : "", style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
