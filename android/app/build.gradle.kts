@@ -23,8 +23,12 @@ android {
 
     defaultConfig {
         applicationId = "com.example.chatflo"
+ 
         minSdk = flutter.minSdkVersion // Hoặc flutter.minSdkVersion
         targetSdk = 36 
+        minSdk = flutter.minSdkVersion
+        targetSdk = 36
+ main
         versionCode = 1
         versionName = "1.0"
         

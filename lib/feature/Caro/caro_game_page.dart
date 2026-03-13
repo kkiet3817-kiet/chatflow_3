@@ -103,6 +103,7 @@ class _CaroGamePageState extends State<CaroGamePage> {
   }
 
   void _handleTimeout() {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -170,6 +171,7 @@ class _CaroGamePageState extends State<CaroGamePage> {
   }
 
   void _showWinDialog() {
+     if (!mounted) return;
      showDialog(
       context: context,
       barrierDismissible: false,
@@ -232,10 +234,10 @@ class _CaroGamePageState extends State<CaroGamePage> {
       width: 140,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: active ? Colors.blue.withOpacity(0.2) : Colors.white10,
+        color: active ? Colors.blue.withValues(alpha: 0.2) : Colors.white10,
         borderRadius: BorderRadius.circular(15),
         border: active ? Border.all(color: Colors.blueAccent, width: 2) : null,
-        boxShadow: active ? [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10)] : null,
+        boxShadow: active ? [BoxShadow(color: Colors.blue.withValues(alpha: 0.3), blurRadius: 10)] : null,
       ),
       child: Column(
         children: [
@@ -257,7 +259,7 @@ class _CaroGamePageState extends State<CaroGamePage> {
       decoration: BoxDecoration(
         color: const Color(0xFFD4A373),
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 5))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 15, offset: const Offset(0, 5))],
       ),
       child: AspectRatio(
         aspectRatio: 1,
@@ -306,7 +308,7 @@ class _CaroGamePageState extends State<CaroGamePage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
           decoration: BoxDecoration(
-            color: myTurn ? Colors.green.withOpacity(0.2) : Colors.white10,
+            color: myTurn ? Colors.green.withValues(alpha: 0.2) : Colors.white10,
             borderRadius: BorderRadius.circular(30),
           ),
           child: Text(
