@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
@@ -33,6 +32,7 @@ class ChatPage extends StatefulWidget {
   });
 
   @override
+
   State<ChatPage> createState() => _ChatPageState();
 }
 
@@ -62,6 +62,11 @@ class _ChatPageState extends State<ChatPage> {
   List<Map<String, dynamic>> _groupMembers = [];
   bool _showTagSuggestions = false;
 
+  // Quản lý subscriptions để tránh memory leak
+  StreamSubscription? _themeSub;
+  StreamSubscription? _blockMeSub;
+  StreamSubscription? _blockOtherSub;
+
   String get currentRoomId {
     if (widget.roomId != null) return widget.roomId!;
     if (widget.isGroup) return widget.receiverName;
@@ -83,6 +88,9 @@ class _ChatPageState extends State<ChatPage> {
   void dispose() {
     if (_isCurrentlyTyping) _setTypingStatus(false);
     _typingTimer?.cancel();
+    _themeSub?.cancel();
+    _blockMeSub?.cancel();
+    _blockOtherSub?.cancel();
     _audioRecorder.dispose();
     _audioPlayer.dispose();
     _controller.dispose();
@@ -91,7 +99,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _listenToThemeAndNicknames() {
-    _firestore.collection('conversations').doc(currentRoomId).snapshots().listen((snap) {
+    _themeSub = _firestore.collection('conversations').doc(currentRoomId).snapshots().listen((snap) {
       if (!mounted || !snap.exists) return;
       final data = snap.data()!;
       setState(() {
@@ -104,13 +112,13 @@ class _ChatPageState extends State<ChatPage> {
 
   void _checkBlockStatus() {
     if (widget.isGroup) return;
-    _firestore.collection('users').doc(widget.currentUserId).snapshots().listen((snap) {
+    _blockMeSub = _firestore.collection('users').doc(widget.currentUserId).snapshots().listen((snap) {
       if (snap.exists && mounted) {
         List blockedList = snap.data()?['blockedUsers'] ?? [];
         setState(() => _isBlockedByMe = blockedList.contains(widget.receiverName));
       }
     });
-    _firestore.collection('users').doc(widget.receiverName).snapshots().listen((snap) {
+    _blockOtherSub = _firestore.collection('users').doc(widget.receiverName).snapshots().listen((snap) {
       if (snap.exists && mounted) {
         List blockedList = snap.data()?['blockedUsers'] ?? [];
         setState(() => _isBlockedByOther = blockedList.contains(widget.currentUserId));
@@ -242,6 +250,7 @@ class _ChatPageState extends State<ChatPage> {
     if (_isBlockedByMe || _isBlockedByOther) return;
     if (_editingMessage != null && content != null) {
       await _firestore.collection('messages').doc(_editingMessage!.id).update({'content': content, 'isEdited': true});
+      if (!mounted) return;
       _controller.clear();
       FocusScope.of(context).unfocus();
       setState(() { _editingMessage = null; _isComposing = false; });
@@ -282,6 +291,7 @@ class _ChatPageState extends State<ChatPage> {
 
     await _firestore.collection('conversations').doc(currentRoomId).set(convUpdate, SetOptions(merge: true));
 
+    if (!mounted) return;
     _controller.clear();
     FocusScope.of(context).unfocus();
     if (_isCurrentlyTyping) { _isCurrentlyTyping = false; _setTypingStatus(false); }
@@ -360,7 +370,7 @@ class _ChatPageState extends State<ChatPage> {
         backgroundColor: Colors.white,
         appBar: _buildAppBar(),
         body: Container(
-          decoration: _backgroundUrl != null ? BoxDecoration(image: DecorationImage(image: NetworkImage(_backgroundUrl!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.1), BlendMode.darken))) : null,
+          decoration: _backgroundUrl != null ? BoxDecoration(image: DecorationImage(image: NetworkImage(_backgroundUrl!), fit: BoxFit.cover, colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.1), BlendMode.darken))) : null,
           child: Column(
             children: [
               Expanded(child: _buildMessageList()),
@@ -474,7 +484,7 @@ class _ChatPageState extends State<ChatPage> {
               const SizedBox(width: 5), Text(timeStr, style: const TextStyle(fontSize: 10, color: Colors.grey)),
             ],
           ),
-          if (isMe && isLast && m.isSeen && !widget.isGroup) Padding(padding: const EdgeInsets.only(top: 2, right: 2), child: const Text("Đã xem", style: TextStyle(fontSize: 10, color: Colors.grey))),
+          if (isMe && isLast && m.isSeen && !widget.isGroup) const Padding(padding: EdgeInsets.only(top: 2, right: 2), child: Text("Đã xem", style: TextStyle(fontSize: 10, color: Colors.grey))),
         ],
       ),
     );
@@ -575,13 +585,13 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) { 
       debugPrint("Lỗi upload: $e"); 
     } finally { 
-      setState(() => _isUploading = false); 
+      if (mounted) setState(() => _isUploading = false); 
     } 
   }
 
   void _showThemePicker() { 
     final colors = [Colors.blueAccent, Colors.redAccent, Colors.purpleAccent, Colors.greenAccent, Colors.orangeAccent]; 
-    showModalBottomSheet(context: context, builder: (context) => Container(height: 100, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: colors.map((c) => GestureDetector(onTap: () => _updateTheme(c), child: CircleAvatar(backgroundColor: c))).toList()))); 
+    showModalBottomSheet(context: context, builder: (context) => SizedBox(height: 100, child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: colors.map((c) => GestureDetector(onTap: () => _updateTheme(c), child: CircleAvatar(backgroundColor: c))).toList()))); 
   }
 
   Widget _buildReplyBubble(MessageModel reply, bool isMe) => Container(margin: const EdgeInsets.only(bottom: 2), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(10), border: const Border(left: BorderSide(color: Colors.blueAccent, width: 3))), child: Text(reply.content, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
@@ -593,6 +603,6 @@ class _ChatPageState extends State<ChatPage> {
 
   void _showNicknameDialog() {
     TextEditingController nickController = TextEditingController(text: _nicknames[widget.receiverName] ?? "");
-    showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Đặt biệt danh"), content: TextField(controller: nickController, decoration: const InputDecoration(hintText: "Nhập biệt danh...")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("HỦY")), TextButton(onPressed: () async { String nick = nickController.text.trim(); if (nick.isEmpty) { _nicknames.remove(widget.receiverName); } else { _nicknames[widget.receiverName] = nick; } await _firestore.collection('conversations').doc(currentRoomId).set({'nicknames': _nicknames}, SetOptions(merge: true)); if (mounted) { FocusScope.of(context).unfocus(); Navigator.pop(context); } }, child: const Text("LƯU"))]));
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text("Đặt biệt danh"), content: TextField(controller: nickController, decoration: const InputDecoration(hintText: "Nhập biệt danh...")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("HỦY")), TextButton(onPressed: () async { String nick = nickController.text.trim(); if (nick.isEmpty) { _nicknames.remove(widget.receiverName); } else { _nicknames[widget.receiverName] = nick; } await _firestore.collection('conversations').doc(currentRoomId).set({'nicknames': _nicknames}, SetOptions(merge: true)); if (context.mounted) { FocusScope.of(context).unfocus(); Navigator.pop(context); } }, child: const Text("LƯU"))]));
   }
 }
