@@ -1,12 +1,10 @@
 name: chatflow_3
 description: A new Flutter project.
-
 publish_to: "none"
-
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.0
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -14,29 +12,40 @@ dependencies:
 
   flutter_riverpod: ^2.5.1
   cupertino_icons: ^1.0.8
-  shared_preferences: ^2.2.2
-  sqflite: ^2.3.0
+  shared_preferences: ^2.3.2
+  sqflite: ^2.3.3+2
   path: ^1.9.0
-  image_picker: ^1.0.7
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
   intl: ^0.19.0
-  http: ^1.1.0
-  
-  # Thư viện Firebase
-  firebase_core: ^2.24.2
-  cloud_firestore: ^4.14.0
-  firebase_auth: ^4.16.0
-  firebase_storage: ^11.6.5
+  http: ^1.2.2
+  googleapis_auth: ^1.4.1 
 
-  # Thư viện Cờ Vua (Theo gợi ý của hệ thống)
+  # Firebase & Notifications
+  firebase_core: ^3.3.0
+  cloud_firestore: ^5.2.1
+  firebase_auth: ^5.1.4
+  firebase_storage: ^12.1.3
+  firebase_messaging: ^15.1.3
+  flutter_local_notifications: ^17.0.0
+
+  # Plugins & Games
   flutter_chess_board: ^1.0.1
-  record: ^6.2.0
-  audioplayers: ^6.6.0
-  path_provider: ^2.1.5
+  record: 5.1.0
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
 
+# Loại bỏ hoàn toàn các overrides cũ để pub tự tìm bản khớp với record 5.1.0
+dependency_overrides:
+  record_linux: 1.1.0
+  record_platform_interface: 1.4.0
+
 flutter:
   uses-material-design: true
+  assets:
+    # - lib/feature/assets/service-account.json # Tạm thời ẩn đi vì thiếu file thực tế

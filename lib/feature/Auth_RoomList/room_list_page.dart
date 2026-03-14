@@ -2,10 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'chat_page.dart';
 import 'login_page.dart';
 import 'create_group_page.dart';
 import 'profile_page.dart';
+import 'note_page.dart';
 import '../Chess/chess_game_page.dart';
 import '../Caro/caro_game_page.dart';
 import '../BlockBlast/block_blast_game_page.dart';
@@ -20,9 +23,11 @@ class RoomListPage extends StatefulWidget {
 
 class _RoomListPageState extends State<RoomListPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AudioPlayer _audioPlayer = AudioPlayer();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
   int _selectedIndex = 0;
+  String? _currentlyPlayingUrl;
 
   final Color primaryColor = const Color(0xFF377DFF);
   final Color bgColor = const Color(0xFFF1F4FB);
@@ -31,6 +36,26 @@ class _RoomListPageState extends State<RoomListPage> {
   void initState() {
     super.initState();
     _setOnlineStatus(true);
+    _setupFCMToken(); 
+  }
+
+  Future<void> _setupFCMToken() async {
+    try {
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await _firestore.collection('users').doc(widget.username).update({
+          'fcmToken': token,
+        });
+      }
+    } catch (e) {
+      debugPrint("FCM Error: $e");
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   void _setOnlineStatus(bool isOnline) {
@@ -38,7 +63,151 @@ class _RoomListPageState extends State<RoomListPage> {
       _firestore.collection('users').doc(widget.username).update({
         'isOnline': isOnline,
         'lastSeen': DateTime.now().toIso8601String(),
+      }).catchError((e) => debugPrint("Error updating status: $e"));
+    }
+  }
+
+  void _playNoteAudio(String url) async {
+    if (_currentlyPlayingUrl == url) {
+      await _audioPlayer.stop();
+      setState(() => _currentlyPlayingUrl = null);
+    } else {
+      await _audioPlayer.stop();
+      await _audioPlayer.play(UrlSource(url));
+      setState(() => _currentlyPlayingUrl = url);
+      _audioPlayer.onPlayerComplete.listen((event) {
+        if (mounted) setState(() => _currentlyPlayingUrl = null);
       });
+    }
+  }
+
+  void _showNoteDetails(Map<String, dynamic> data, String name, String avatar) {
+    TextEditingController replyController = TextEditingController();
+    bool isMe = data['userId'] == widget.username;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          String? audioUrl = data['audioUrl'];
+          bool isPlaying = _currentlyPlayingUrl == audioUrl && audioUrl != null;
+
+          return Container(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 20, left: 20, right: 20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(radius: 40, backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=$name")),
+                const SizedBox(height: 10),
+                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 15),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+                  child: Text(data['content'] ?? "", textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+                ),
+                if (audioUrl != null) ...[
+                  const SizedBox(height: 15),
+                  GestureDetector(
+                    onTap: () async {
+                      _playNoteAudio(audioUrl);
+                      setModalState(() {}); 
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(30)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.blue, size: 30),
+                          const SizedBox(width: 10),
+                          Text(data['audioName'] ?? "Đang phát nhạc...", style: const TextStyle(color: Colors.blue)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                if (!isMe) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: replyController,
+                          decoration: InputDecoration(
+                            hintText: "Trả lời ghi chú...",
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        icon: const Icon(Icons.send, color: Colors.blue),
+                        onPressed: () => _replyToNote(data['userId'], replyController.text),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (isMe) ...[
+                  TextButton(
+                    onPressed: () {
+                      _firestore.collection('notes').doc(widget.username).delete();
+                      Navigator.pop(context);
+                    },
+                    child: const Text("Gỡ ghi chú", style: TextStyle(color: Colors.red)),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          );
+        }
+      ),
+    );
+  }
+
+  void _replyToNote(String receiverId, String content) async {
+    if (content.trim().isEmpty) return;
+    
+    List<String> ids = [widget.username, receiverId];
+    ids.sort();
+    String roomId = "1on1_${ids.join('_')}";
+    
+    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
+    await _firestore.collection('messages').doc(msgId).set({
+      'id': msgId,
+      'senderId': widget.username,
+      'receiverId': receiverId,
+      'roomId': roomId,
+      'content': "Đã phản hồi ghi chú của bạn: $content",
+      'createdAt': DateTime.now().toIso8601String(),
+      'type': 'text',
+      'isUnsent': false,
+      'isSeen': false,
+    });
+
+    await _firestore.collection('conversations').doc(roomId).set({
+      'id': roomId,
+      'lastMessage': "Đã phản hồi ghi chú: $content",
+      'lastSenderId': widget.username,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'participants': ids,
+      'type': '1on1',
+    }, SetOptions(merge: true));
+
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã gửi phản hồi!")));
     }
   }
 
@@ -96,50 +265,17 @@ class _RoomListPageState extends State<RoomListPage> {
     }
   }
 
-  Future<void> _unfriend(String friendId) async {
-    bool confirm = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Xóa bạn bè"),
-        content: Text("Bạn có chắc chắn muốn xóa $friendId khỏi danh sách bạn bè?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("HỦY")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("XÓA", style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    ) ?? false;
-    if (confirm) {
-      await _firestore.collection('users').doc(widget.username).update({'friends': FieldValue.arrayRemove([friendId])});
-      await _firestore.collection('users').doc(friendId).update({'friends': FieldValue.arrayRemove([widget.username])});
-    }
-  }
-
-  Future<void> _acceptFriend(String requesterId) async {
-    await _firestore.collection('users').doc(widget.username).update({'friends': FieldValue.arrayUnion([requesterId]), 'incomingRequests': FieldValue.arrayRemove([requesterId])});
-    await _firestore.collection('users').doc(requesterId).update({'friends': FieldValue.arrayUnion([widget.username]), 'outgoingRequests': FieldValue.arrayRemove([widget.username])});
-  }
-
-  Future<void> _declineFriend(String requesterId) async {
-    await _firestore.collection('users').doc(widget.username).update({'incomingRequests': FieldValue.arrayRemove([requesterId])});
-    await _firestore.collection('users').doc(requesterId).update({'outgoingRequests': FieldValue.arrayRemove([widget.username])});
-  }
-
   @override
   Widget build(BuildContext context) {
     bool isProfileTab = _selectedIndex == 2;
-
     return Scaffold(
-      backgroundColor: isProfileTab ? Colors.white : bgColor, // Chuyển nền trắng cho tab cá nhân
+      backgroundColor: isProfileTab ? Colors.white : bgColor,
       bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Chỉ hiện Header nếu KHÔNG PHẢI tab Cá nhân
             if (!isProfileTab) _buildHeader(),
-            
-            // 2. Chỉ hiện Search Bar nếu KHÔNG PHẢI tab Cá nhân
             if (!isProfileTab) _buildSearchBar(),
-            
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -183,11 +319,11 @@ class _RoomListPageState extends State<RoomListPage> {
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('users').doc(widget.username).snapshots(),
       builder: (context, snapshot) {
-        String name = widget.username; String avatar = ""; bool isMeOnline = false;
+        String name = widget.username; String avatarUrl = ""; bool isMeOnline = false;
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>?;
           name = data?['displayName'] ?? name;
-          avatar = data?['avatarUrl'] ?? "";
+          avatarUrl = data?['avatarUrl'] ?? "";
           isMeOnline = data?['isOnline'] == true;
         }
         return Padding(
@@ -195,12 +331,12 @@ class _RoomListPageState extends State<RoomListPage> {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => _showFullImage(avatar, name),
+                onTap: () => _showFullImage(avatarUrl, name),
                 child: Container(
                   decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.2), blurRadius: 10)]),
                   child: Stack(
                     children: [
-                      CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=$name&background=random")),
+                      CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatarUrl.isNotEmpty ? avatarUrl : "https://ui-avatars.com/api/?name=$name&background=random")),
                       if (isMeOnline) Positioned(right: 2, bottom: 2, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2.5)))),
                     ],
                   ),
@@ -262,6 +398,8 @@ class _RoomListPageState extends State<RoomListPage> {
       return ListView(
         physics: const BouncingScrollPhysics(),
         children: [
+          _buildSectionHeader("Ghi chú", Icons.sticky_note_2_rounded, onActionTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotePage(currentUserId: widget.username)))),
+          _buildNoteBar(),
           _buildSectionHeader("Trò chơi giải trí", Icons.videogame_asset_rounded),
           _buildGameHub(),
           _buildSectionHeader("Nhóm của tôi", Icons.groups_rounded),
@@ -276,6 +414,128 @@ class _RoomListPageState extends State<RoomListPage> {
     } else {
       return ProfilePage(username: widget.username);
     }
+  }
+
+  Widget _buildNoteBar() {
+    return SizedBox(
+      height: 110,
+      child: StreamBuilder<QuerySnapshot>(
+        stream: _firestore.collection('notes').snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const SizedBox();
+          final now = DateTime.now();
+          final notes = snapshot.data!.docs.where((doc) {
+            var data = doc.data() as Map<String, dynamic>;
+            if (data['expiresAt'] == null) return true;
+            return (data['expiresAt'] as Timestamp).toDate().isAfter(now);
+          }).toList();
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: notes.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _buildAddNoteButton();
+              }
+              final noteData = notes[index - 1].data() as Map<String, dynamic>;
+              return _buildNoteItem(noteData);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAddNoteButton() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(widget.username).snapshots(),
+      builder: (context, snap) {
+        String avatar = "";
+        if (snap.hasData && snap.data!.exists) {
+          avatar = (snap.data!.data() as Map<String, dynamic>)['avatarUrl'] ?? "";
+        }
+        return GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotePage(currentUserId: widget.username))),
+          child: Container(
+            margin: const EdgeInsets.only(right: 15),
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    CircleAvatar(radius: 30, backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=${widget.username}")),
+                    Positioned(right: 0, bottom: 0, child: Container(decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.add_circle, color: Colors.blue, size: 20))),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                const Text("Ghi chú", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+        );
+      }
+    );
+  }
+
+  Widget _buildNoteItem(Map<String, dynamic> data) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _firestore.collection('users').doc(data['userId']).snapshots(),
+      builder: (context, userSnap) {
+        String avatar = ""; String name = data['userId'];
+        if (userSnap.hasData && userSnap.data!.exists) {
+          final uData = userSnap.data!.data() as Map<String, dynamic>;
+          avatar = uData['avatarUrl'] ?? "";
+          name = uData['displayName'] ?? uData['username'] ?? name;
+        }
+        String? audioUrl = data['audioUrl'];
+        bool isPlaying = _currentlyPlayingUrl == audioUrl && audioUrl != null;
+
+        return GestureDetector(
+          onTap: () => _showNoteDetails(data, name, avatar),
+          child: Container(
+            width: 80,
+            margin: const EdgeInsets.only(right: 15),
+            child: Column(
+              children: [
+                Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 15),
+                      child: CircleAvatar(
+                        radius: 28, 
+                        backgroundImage: NetworkImage(avatar.isNotEmpty ? avatar : "https://ui-avatars.com/api/?name=$name"),
+                        child: isPlaying ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white) : null,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                        border: Border.all(color: isPlaying ? Colors.blue : Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (audioUrl != null) Icon(isPlaying ? Icons.pause : Icons.music_note, size: 10, color: Colors.blue),
+                          if (audioUrl != null && data['content'] != null && data['content'].isNotEmpty) const SizedBox(width: 2),
+                          if (data['content'] != null && data['content'].isNotEmpty)
+                            Flexible(child: Text(data['content'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(name, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildGameHub() {
@@ -316,10 +576,10 @@ class _RoomListPageState extends State<RoomListPage> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox();
         
-        final docs = snapshot.data!.docs.where((doc) => (doc.data() as Map)['type'] == 'group').toList();
+        final docs = snapshot.data!.docs.where((doc) => (doc.data() as Map<String, dynamic>)['type'] == 'group').toList();
         docs.sort((a, b) {
-          var t1 = (a.data() as Map)['updatedAt'] as Timestamp?;
-          var t2 = (b.data() as Map)['updatedAt'] as Timestamp?;
+          var t1 = (a.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?;
+          var t2 = (b.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?;
           return (t2 ?? Timestamp.now()).compareTo(t1 ?? Timestamp.now());
         });
 
@@ -375,8 +635,8 @@ class _RoomListPageState extends State<RoomListPage> {
         
         final docs = snapshot.data!.docs.toList();
         docs.sort((a, b) {
-          var t1 = (a.data() as Map)['updatedAt'] as Timestamp?;
-          var t2 = (b.data() as Map)['updatedAt'] as Timestamp?;
+          var t1 = (a.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?;
+          var t2 = (b.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?;
           return (t2 ?? Timestamp.now()).compareTo(t1 ?? Timestamp.now());
         });
 
@@ -453,7 +713,7 @@ class _RoomListPageState extends State<RoomListPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, IconData icon, {VoidCallback? onActionTap}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(25, 20, 25, 15),
       child: Row(
@@ -462,7 +722,10 @@ class _RoomListPageState extends State<RoomListPage> {
           const SizedBox(width: 10),
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: -0.5)),
           const Spacer(),
-          Text("Xem tất cả", style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+          GestureDetector(
+            onTap: onActionTap,
+            child: Text(onActionTap != null ? "Xem tất cả" : "", style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
@@ -606,6 +869,30 @@ class _RoomListPageState extends State<RoomListPage> {
     await _firestore.collection('users').doc(targetUserId).update({'incomingRequests': FieldValue.arrayUnion([widget.username])});
     await _firestore.collection('users').doc(widget.username).update({'outgoingRequests': FieldValue.arrayUnion([targetUserId])});
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã gửi lời mời kết bạn!")));
+  }
+
+  Future<void> _unfriend(String targetUserId) async {
+    await _firestore.collection('users').doc(widget.username).update({'friends': FieldValue.arrayRemove([targetUserId])});
+    await _firestore.collection('users').doc(targetUserId).update({'friends': FieldValue.arrayRemove([widget.username])});
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã hủy kết bạn")));
+  }
+
+  Future<void> _acceptFriend(String targetUserId) async {
+    await _firestore.collection('users').doc(widget.username).update({
+      'friends': FieldValue.arrayUnion([targetUserId]),
+      'incomingRequests': FieldValue.arrayRemove([targetUserId])
+    });
+    await _firestore.collection('users').doc(targetUserId).update({
+      'friends': FieldValue.arrayUnion([widget.username]),
+      'outgoingRequests': FieldValue.arrayRemove([widget.username])
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã chấp nhận lời mời kết bạn")));
+  }
+
+  Future<void> _declineFriend(String targetUserId) async {
+    await _firestore.collection('users').doc(widget.username).update({'incomingRequests': FieldValue.arrayRemove([targetUserId])});
+    await _firestore.collection('users').doc(targetUserId).update({'outgoingRequests': FieldValue.arrayRemove([widget.username])});
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã từ chối lời mời kết bạn")));
   }
 
   void _handleOpenGame(String type) {
